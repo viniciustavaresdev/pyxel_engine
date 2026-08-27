@@ -1,0 +1,78 @@
+# Existe para que `pip install -e .` funcione. Sem isto o projeto so
+# resolve `engine` quando o interpretador ja parte da raiz -- o que
+# quebra na hora em que alguem roda um script pelo caminho do arquivo,
+# como faz o botao Run de uma IDE.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyxel-engine"
+version = "0.1.0"
+description = "Engine Scene Graph minimalista em Python, com Pyxel como backend."
+readme = "README.md"
+requires-python = ">=3.11"
+
+# Faixa em vez de pin exato: isto e uma biblioteca, nao uma aplicacao.
+# Um `==` aqui forcaria conflito em qualquer projeto que dependa dela
+# junto com outra versao de Pyxel.
+dependencies = [
+    "pyxel>=2.9,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "mypy>=1.11",
+    "ruff>=0.6",
+    "black>=24.0",
+]
+
+# `engine*` cobre engine/ e todos os subpacotes. `tests` fica de fora
+# de proposito: e verificacao do projeto, nao parte do que se distribui.
+#
+# `namespaces = false` exige __init__.py em todo pacote. E mais estrito
+# que o default: um subpacote novo que esqueca o __init__.py falha no
+# import em vez de virar namespace package implicito e so quebrar mais
+# tarde, no wheel de alguem.
+[tool.setuptools.packages.find]
+include = ["engine*"]
+namespaces = false
+
+# `pythonpath` cobre quem roda pytest sem ter feito `pip install -e .`.
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.black]
+line-length = 79
+
+# Alinhado com requires-python e com o target-version do ruff. Sem isto
+# o black infere a versao mais nova que conhece e passa a formatar para
+# uma sintaxe que o interpretador local nem sabe ler -- a checagem de
+# equivalencia dele falha antes de comparar qualquer coisa.
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 79
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+# Checagem de tipos. Estrito em engine/: uma engine que se apresenta
+# como tipada tem de aguentar --strict.
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["engine", "tests"]
+
+# Em tests/ o CORPO continua verificado (e assim que um duble
+# dessincronizado da porta aparece), mas exigir `-> None` em cada
+# funcao de teste seria ruido sem sinal.
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
