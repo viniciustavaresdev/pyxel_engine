@@ -13,17 +13,12 @@ import pyxel
 from engine.adapters.pyxel.pyxel_application import PyxelApplication
 from engine.adapters.pyxel.pyxel_input import _PYXEL_KEYS, PyxelInput
 from engine.adapters.pyxel.pyxel_renderer import PyxelRenderer
-from engine.adapters.pyxel.pyxel_time_provider import PyxelTimeProvider
-from engine.adapters.stdlib.performance_time_provider import (
-    PerformanceTimeProvider,
-)
 from engine.input.key import Key
 from engine.math.rect import Rect
 from engine.math.vector2d import Vector2D
 from engine.ports.application import Application
 from engine.ports.input import Input
 from engine.ports.renderer import Renderer
-from engine.ports.time_provider import TimeProvider
 
 
 class TestKeyMapCompleteness:
@@ -66,12 +61,6 @@ class TestAdaptersSatisfyTheirPorts:
 
     def test_pyxel_input(self):
         assert isinstance(PyxelInput(), Input)
-
-    def test_pyxel_time_provider(self):
-        assert isinstance(PyxelTimeProvider(), TimeProvider)
-
-    def test_performance_time_provider(self):
-        assert isinstance(PerformanceTimeProvider(), TimeProvider)
 
 
 class TestPyxelRendererSpriteOrigin:
@@ -176,22 +165,3 @@ class TestTheAdapterDoesNotSnapToTheGrid:
         PyxelRenderer().set_camera(Vector2D(-30.5, 40.25))
 
         assert calls[0] == (-30.5, 40.25)
-
-
-class TestPyxelTimeProvider:
-
-    def test_rejects_a_non_positive_fps(self):
-        for fps in (0, -1):
-            try:
-                PyxelTimeProvider(fps=fps)
-            except ValueError:
-                continue
-
-            raise AssertionError(f"fps={fps} deveria ter sido rejeitado")
-
-    def test_converts_frames_into_seconds(self):
-        # frame_count e 0 fora do loop, entao o que da para afirmar sem
-        # abrir janela e a conversao em si.
-        provider = PyxelTimeProvider(fps=60)
-
-        assert provider.now() == 0.0

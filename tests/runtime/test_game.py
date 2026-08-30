@@ -1,15 +1,9 @@
 from engine.runtime.application_config import ApplicationConfig
-from engine.runtime.clock import Clock
 from engine.runtime.engine import Engine
 from engine.runtime.game import Game
 from engine.scene.node import Node
 from engine.scene.scene_manager import SceneManager
-from tests.conftest import (
-    SpyApplication,
-    SpyInput,
-    SpyScene,
-    SpyTimeProvider,
-)
+from tests.conftest import SpyApplication, SpyInput, SpyScene
 
 
 def build_game(log, renderer, frames=1, scene=None, input=None):
@@ -25,7 +19,6 @@ def build_game(log, renderer, frames=1, scene=None, input=None):
     log.clear()
 
     engine = Engine(
-        clock=Clock(SpyTimeProvider()),
         scene_manager=manager,
         renderer=renderer,
         input=input if input is not None else SpyInput(),
@@ -75,7 +68,6 @@ class TestInitialScene:
     def test_loads_the_initial_scene(self, log, renderer):
         manager = SceneManager()
         engine = Engine(
-            clock=Clock(SpyTimeProvider()),
             scene_manager=manager,
             renderer=renderer,
             input=SpyInput(),
@@ -111,7 +103,6 @@ class TestInitialScene:
                 super().on_enter()
 
         engine = Engine(
-            clock=Clock(SpyTimeProvider()),
             scene_manager=SceneManager(),
             renderer=renderer,
             input=SpyInput(),
@@ -131,7 +122,6 @@ class TestInitialScene:
         # Continua legal nao passar cena: o loop gira contra um
         # SceneManager vazio em vez de explodir.
         engine = Engine(
-            clock=Clock(SpyTimeProvider()),
             scene_manager=SceneManager(),
             renderer=renderer,
             input=SpyInput(),
@@ -157,7 +147,7 @@ class TestFrameLoop:
         assert (
             log
             == [
-                ("update", "Level1", 0.0),
+                ("update", "Level1"),
                 ("render", "Level1"),
             ]
             * 3
@@ -190,7 +180,7 @@ class TestQuit:
                 super().__init__(name)
                 self.engine = engine
 
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 self.engine.stop()
 
         scene = SpyScene("Level1", log)
@@ -209,7 +199,7 @@ class TestQuit:
                 super().__init__(name)
                 self.engine = engine
 
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 self.engine.stop()
 
         scene = SpyScene("Level1", log)

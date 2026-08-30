@@ -9,7 +9,6 @@ import pytest
 from engine.ports.application import Application
 from engine.ports.input import Input
 from engine.ports.renderer import Renderer
-from engine.ports.time_provider import TimeProvider
 from engine.scene.node import Node
 from engine.scene.scene import Scene
 
@@ -150,19 +149,6 @@ class SpyApplication(Application):
         self._running = False
 
 
-class SpyTimeProvider(TimeProvider):
-    """Relogio controlado pelo teste, para dt deterministico."""
-
-    def __init__(self, start=0.0):
-        self.value = start
-
-    def advance(self, seconds):
-        self.value += seconds
-
-    def now(self):
-        return self.value
-
-
 class SpyNode(Node):
     """Anota em uma lista compartilhada tudo que recebe.
 
@@ -181,8 +167,8 @@ class SpyNode(Node):
     def on_exit(self):
         self.log.append(("exit", self.name))
 
-    def on_update(self, dt, input):
-        self.log.append(("update", self.name, dt))
+    def on_update(self, input):
+        self.log.append(("update", self.name))
 
     def on_render(self, renderer):
         self.log.append(("render", self.name))
@@ -205,8 +191,8 @@ class SpyScene(Scene):
     def on_exit(self):
         self.log.append(("exit", self.name))
 
-    def on_update(self, dt, input):
-        self.log.append(("update", self.name, dt))
+    def on_update(self, input):
+        self.log.append(("update", self.name))
 
     def on_render(self, renderer):
         self.log.append(("render", self.name))

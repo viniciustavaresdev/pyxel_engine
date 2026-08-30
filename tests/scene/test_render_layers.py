@@ -50,9 +50,9 @@ class TestTheLayersAreOrdinaryNodes:
         scene.world.add_child(SpyNode("InWorld", log))
         scene.ui.add_child(SpyNode("InUi", log))
 
-        scene.update(0.25, spy_input)
+        scene.update(spy_input)
 
-        assert log == [("update", "InWorld", 0.25), ("update", "InUi", 0.25)]
+        assert log == [("update", "InWorld"), ("update", "InUi")]
 
     def test_enter_reaches_both_layers(self, log):
         scene = Scene("Level1")
@@ -72,7 +72,7 @@ class TestTheLayersAreOrdinaryNodes:
         scene.enter()
 
         doomed.queue_free()
-        scene.update(0.016, spy_input)
+        scene.update(spy_input)
 
         assert scene.ui.children == []
 
@@ -226,9 +226,9 @@ class TestThePauseCase:
         scene.ui.add_child(SpyNode("Menu", log))
 
         scene.world.active = False
-        scene.update(0.016, spy_input)
+        scene.update(spy_input)
 
-        assert log == [("update", "Menu", 0.016)]
+        assert log == [("update", "Menu")]
 
     def test_a_frozen_world_is_still_drawn(self, log, renderer):
         # Os dois portoes sao separados: pausado continua na tela.

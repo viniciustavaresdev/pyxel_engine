@@ -174,13 +174,13 @@ class TestTraversalOrder:
     def test_update_is_pre_order(self, log, spy_input):
         # O pai atualiza ANTES dos filhos: um filho que le o estado do
         # pai no mesmo frame ve o valor ja atualizado.
-        build_tree(log).update(0.5, spy_input)
+        build_tree(log).update(spy_input)
 
         assert log == [
-            ("update", "World", 0.5),
-            ("update", "Player", 0.5),
-            ("update", "Weapon", 0.5),
-            ("update", "Shadow", 0.5),
+            ("update", "World"),
+            ("update", "Player"),
+            ("update", "Weapon"),
+            ("update", "Shadow"),
         ]
 
     def test_render_is_pre_order(self, log, renderer):
@@ -219,10 +219,18 @@ class TestTraversalOrder:
             ("exit", "World"),
         ]
 
-    def test_dt_reaches_every_node_unchanged(self, log, spy_input):
-        build_tree(log).update(0.016, spy_input)
+    def test_one_update_is_one_frame_for_every_node(self, log, spy_input):
+        # O que este teste afirmava antes: que o dt chegava intacto a
+        # cada no. Sem dt, o que sobra para garantir e mais forte -- um
+        # update da arvore e exatamente um on_update por no, sem
+        # repeticao de compensacao e sem ninguem pulado.
+        world = build_tree(log)
 
-        assert all(entry[2] == 0.016 for entry in log)
+        world.update(spy_input)
+        world.update(spy_input)
+
+        assert log.count(("update", "Player")) == 2
+        assert len(log) == 8
 
 
 class TestRenderPropagation:
@@ -498,7 +506,7 @@ class TestActive:
         node = SpyNode("Node", log)
         node.active = False
 
-        node.update(0.5, spy_input)
+        node.update(spy_input)
 
         assert log == []
 
@@ -507,7 +515,7 @@ class TestActive:
         parent.add_child(SpyNode("Child", log))
         parent.active = False
 
-        parent.update(0.5, spy_input)
+        parent.update(spy_input)
 
         assert log == []
 
@@ -528,11 +536,11 @@ class TestActive:
         parent.add_child(frozen)
         parent.add_child(SpyNode("Awake", log))
 
-        parent.update(0.5, spy_input)
+        parent.update(spy_input)
 
         assert log == [
-            ("update", "Parent", 0.5),
-            ("update", "Awake", 0.5),
+            ("update", "Parent"),
+            ("update", "Awake"),
         ]
 
 
@@ -562,9 +570,9 @@ class TestVisible:
         node = SpyNode("Node", log)
         node.visible = False
 
-        node.update(0.5, spy_input)
+        node.update(spy_input)
 
-        assert log == [("update", "Node", 0.5)]
+        assert log == [("update", "Node")]
 
 
 class TestMutationDuringTraversal:
@@ -573,7 +581,7 @@ class TestMutationDuringTraversal:
         self, log, spy_input
     ):
         class SelfRemover(Node):
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 assert self.parent is not None
                 self.parent.remove_child(self)
 
@@ -581,9 +589,9 @@ class TestMutationDuringTraversal:
         parent.add_child(SelfRemover("Remover"))
         parent.add_child(SpyNode("Witness", log))
 
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
 
-        assert ("update", "Witness", 0.016) in log
+        assert ("update", "Witness") in log
 
     def test_a_removed_sibling_does_not_update_after_removal(
         self, log, spy_input
@@ -593,7 +601,7 @@ class TestMutationDuringTraversal:
                 super().__init__(name)
                 self.target = target
 
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 assert self.parent is not None
                 self.parent.remove_child(self.target)
 
@@ -602,7 +610,7 @@ class TestMutationDuringTraversal:
         parent.add_child(Killer("Killer", victim))
         parent.add_child(victim)
 
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
 
         assert log == []
 
@@ -618,7 +626,7 @@ class TestMutationDuringTraversal:
                 self.log = log
                 self.spawned = False
 
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 if not self.spawned:
                     self.spawned = True
                     assert self.parent is not None
@@ -627,11 +635,11 @@ class TestMutationDuringTraversal:
         parent = Node("Parent")
         parent.add_child(Spawner("Spawner", log))
 
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
         assert log == []
 
-        parent.update(0.016, spy_input)
-        assert log == [("update", "Spawned", 0.016)]
+        parent.update(spy_input)
+        assert log == [("update", "Spawned")]
 
 
 class TestQueueFree:
@@ -639,31 +647,31 @@ class TestQueueFree:
     def test_queued_node_survives_the_current_frame(self, spy_input):
         # Ele termina o frame: o on_update dele ainda roda por inteiro.
         class Suicidal(Node):
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 self.queue_free()
 
         parent = Node("Parent")
         node = Suicidal("Suicidal")
         parent.add_child(node)
 
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
 
         assert node.parent is None
         assert parent.children == []
 
     def test_queued_node_is_gone_on_the_next_frame(self, log, spy_input):
         class Suicidal(SpyNode):
-            def on_update(self, dt, input):
-                super().on_update(dt, input)
+            def on_update(self, input):
+                super().on_update(input)
                 self.queue_free()
 
         parent = Node("Parent")
         parent.add_child(Suicidal("Suicidal", log))
 
-        parent.update(0.016, spy_input)
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
+        parent.update(spy_input)
 
-        assert log == [("update", "Suicidal", 0.016)]
+        assert log == [("update", "Suicidal")]
 
     def test_queue_free_fires_exit_on_a_live_tree(self, log, spy_input):
         parent = SpyNode("Parent", log)
@@ -673,7 +681,7 @@ class TestQueueFree:
         log.clear()
 
         child.queue_free()
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
 
         assert ("exit", "Child") in log
 
@@ -685,7 +693,7 @@ class TestQueueFree:
         parent.add_child(survivor)
 
         doomed.queue_free()
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
 
         assert parent.children == [survivor]
 
@@ -698,13 +706,13 @@ class TestQueueFree:
         parent.add_child(node)
 
         node.queue_free()
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
         other_parent.add_child(node)
         log.clear()
 
-        other_parent.update(0.016, spy_input)
+        other_parent.update(spy_input)
 
-        assert log == [("update", "Node", 0.016)]
+        assert log == [("update", "Node")]
         assert other_parent.children == [node]
 
 
@@ -731,7 +739,7 @@ class TestQueueFreeIsCollectedAtTheRoot:
         leaf.queue_free()
         branch.active = False
 
-        root.update(0.016, spy_input)
+        root.update(spy_input)
 
         assert leaf.parent is None
         assert branch.children == []
@@ -748,7 +756,7 @@ class TestQueueFreeIsCollectedAtTheRoot:
 
         leaf.queue_free()
         branch.active = False
-        root.update(0.016, spy_input)
+        root.update(spy_input)
 
         assert leaf.is_inside_tree is False
 
@@ -759,7 +767,7 @@ class TestQueueFreeIsCollectedAtTheRoot:
             parent.add_child(child)
 
         nodes[-1].queue_free()
-        nodes[0].update(0.016, spy_input)
+        nodes[0].update(spy_input)
 
         assert nodes[-2].children == []
 
@@ -773,7 +781,7 @@ class TestQueueFreeIsCollectedAtTheRoot:
                 super().__init__(name)
                 self.target = target
 
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 self.target.queue_free()
 
         class Witness(Node):
@@ -782,7 +790,7 @@ class TestQueueFreeIsCollectedAtTheRoot:
                 self.target = target
                 self.log = log
 
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 self.log.append(("saw", self.target.parent is not None))
 
         root = Node("Root")
@@ -791,7 +799,7 @@ class TestQueueFreeIsCollectedAtTheRoot:
         root.add_child(Killer("Killer", victim))
         root.add_child(Witness("Witness", victim, log))
 
-        root.update(0.016, spy_input)
+        root.update(spy_input)
 
         assert log == [("saw", True)]
         assert victim.parent is None
@@ -835,7 +843,7 @@ class TestQueueFreeBookkeeping:
         root.remove_child(node)
         other.add_child(node)
 
-        root.update(0.016, spy_input)
+        root.update(spy_input)
 
         assert node.parent is other
         assert other.children == [node]
@@ -845,7 +853,7 @@ class TestQueueFreeBookkeeping:
         orphan = Node("Orphan")
 
         orphan.queue_free()
-        orphan.update(0.016, spy_input)
+        orphan.update(spy_input)
 
         assert orphan.parent is None
 
@@ -861,7 +869,7 @@ class TestQueueFreeBookkeeping:
 
         root = Node("Root")
         root.add_child(detached)
-        root.update(0.016, spy_input)
+        root.update(spy_input)
 
         assert doomed.parent is None
         assert detached.children == []
@@ -878,7 +886,7 @@ class TestQueueFreeOnAScene:
         scene.enter()
 
         doomed.queue_free()
-        scene.update(0.016, spy_input)
+        scene.update(spy_input)
 
         # Sobram as duas camadas, que a cena cria no construtor: o que
         # o teste cobra e que o no marcado saiu, e nao que a cena ficou

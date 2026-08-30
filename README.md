@@ -5,7 +5,7 @@ como backend — e com o núcleo isolado dele por portas.
 
 A regra que organiza o projeto inteiro cabe em uma linha: **nenhum
 `import pyxel` fora de `engine/adapters/`.** O código de jogo fala com
-abstrações (`Renderer`, `Input`, `Application`, `TimeProvider`), nunca com o
+abstrações (`Renderer`, `Input`, `Application`), nunca com o
 backend. A consequência prática é que a suíte de testes roda sem abrir janela
 nenhuma, e trocar de backend passa a ser escrever outro adaptador em vez de
 caçar constantes espalhadas pelas cenas.
@@ -20,7 +20,7 @@ venv\Scripts\activate          # Windows
 pip install -e ".[dev]"
 
 python main.py                 # a demo
-pytest                         # 432 testes, sem janela
+pytest                         # 411 testes, sem janela
 ```
 
 Verificação (as três precisam passar limpas):
@@ -48,11 +48,11 @@ mypy                           # --strict em engine/ e tests/
                              │  depende só de abstrações
         ┌────────────────────▼─────────────────────────┐
         │  engine/ports/                               │
-        │  Renderer  Input  Application  TimeProvider  │
+        │  Renderer   Input   Application              │
         └────────────────────▲─────────────────────────┘
                              │  implementa
         ┌────────────────────┴─────────────────────────┐
-        │  engine/adapters/pyxel/  stdlib/             │
+        │  engine/adapters/pyxel/                      │
         │  ← o único lugar que conhece o Pyxel         │
         └──────────────────────────────────────────────┘
 ```
@@ -260,12 +260,31 @@ scene.world.visible = False     # o mundo some; o menu fica
 São os dois portões do `Node` (`active` e `visible`) aplicados a uma camada
 inteira. `z_index` dentro de uma camada continua fora, até um jogo pedir.
 
-### Clock — dt com teto
+### O frame é a unidade — não existe `dt`
 
-`max_delta_time` de 0,1 s por padrão: um breakpoint ou um travamento do sistema
-não pode virar um dt gigante que atravessa o jogador pela parede. `reset()`
-re-ancora o relógio sem zerar o tempo acumulado, para que retomar de uma pausa
-não reinicie o tempo de jogo.
+`update()` não recebe tempo. Um update é **um frame**, e velocidade é por frame:
+
+```python
+PLAYER_SPEED = 1.2      # px por frame; a 60 fps, 72 px/s
+```
+
+Quem é dono do laço é a porta `Application` — `pyxel.run` já se compromete com uma
+cadência. Medir o intervalo entre duas chamadas que o backend espaça de propósito
+era o núcleo refazendo uma conta já feita, e o resultado dessa medição (jitter, o
+salto depois de um breakpoint) só gerava trabalho de defesa. O `max_delta_time` de
+0,1 s existia exatamente para conter um dt gigante atravessando o jogador pela
+parede: sem medição, essa classe de bug não é contida — ela deixa de existir.
+
+**O preço, e ele precisa estar escrito: `ApplicationConfig.fps` passou a governar
+a física.** Trocar 60 por 30 ali não muda a suavidade, muda a velocidade de tudo,
+pela metade. A taxa deixou de ser detalhe do backend e virou parte do contrato do
+jogo.
+
+O que continua possível: pausa é `scene.world.active = False`; tempo de jogo é
+contagem de frames (`frames / fps`, para quem quiser em segundos); cooldown em
+frames é mais determinístico do que em segundos. O que fica genuinamente fora é
+câmera lenta fracionária — 0,7x não tem resposta boa num passo fixo, e metade da
+velocidade é atualizar o mundo em frames alternados.
 
 ### Input — três perguntas, não uma
 
@@ -352,14 +371,13 @@ engine/
 ├── scene/           a árvore e quem vive nela
 │   └── node.py  visual_node.py  scene.py  scene_manager.py  camera.py
 ├── runtime/         o laço de frame e a composição do jogo
-│   └── engine.py  game.py  clock.py  application_config.py
+│   └── engine.py  game.py  application_config.py
 ├── input/           vocabulário de entrada
 │   └── key.py  action_map.py
 ├── ports/           o que a engine exige do mundo
-│   └── renderer.py  input.py  application.py  time_provider.py
+│   └── renderer.py  input.py  application.py
 └── adapters/        quem cumpre a exigência
-    ├── pyxel/       pyxel_renderer.py  pyxel_input.py  ...
-    └── stdlib/      performance_time_provider.py
+    └── pyxel/       pyxel_renderer.py  pyxel_input.py  ...
 ```
 
 `tests/` espelha essa árvore: `tests/math/`, `tests/scene/`, `tests/runtime/`,
@@ -374,11 +392,12 @@ virou só o lugar onde as coisas estão.
 Duas coisas que a reorganização corrigiu de passagem: `transform.py` estava fora
 do `math/` sendo valor puro como os outros três, e `infrastructure/` misturava
 dois eixos de nomeação (`pyxel/` pelo backend, `time/` pela porta — virou
-`adapters/stdlib/`).
+`adapters/stdlib/`). Esse `stdlib/` não existe mais: quando o `TimeProvider` saiu,
+sobrou uma pasta com nada dentro, e uma pasta vazia não organiza coisa alguma.
 
 ### A superfície pública
 
-`engine/__init__.py` reexporta os 19 nomes que um jogo realmente usa. O que está
+`engine/__init__.py` reexporta os 17 nomes que um jogo realmente usa. O que está
 lá é contrato; o resto é detalhe interno, livre para mudar de módulo sem aviso.
 
 ```python
@@ -411,9 +430,9 @@ verdade por nunca ninguém carregá-lo. A checagem roda em subprocesso, porque
 
 A separação núcleo/backend está sólida, os dois bugs de ciclo de vida estão
 fechados, as duas decisões de baixo nível foram tomadas, a engine cabe no
-orçamento de frame e o projeto está sob controle de versão. **Os dez passos da
-sequência estão feitos** — os dois últimos, mapa de ações e camadas de render,
-são os que se sentem escrevendo jogo em vez de engine.
+orçamento de frame e o projeto está sob controle de versão. **Os onze passos da
+sequência estão feitos** — os três últimos (mapa de ações, camadas de render e a
+aposentadoria do `dt`) são os que se sentem escrevendo jogo em vez de engine.
 
 O que resta não é sequência, é lista de espera: resposta a colisão, `z_index`,
 `find_child`, o tamanho de tela que vive em dois lugares, e o acabamento. Cada um
@@ -573,6 +592,30 @@ arquivo de teste como oráculo. Um cache errado não levanta exceção: devolve 
 valor de ontem, e o jogo desenha no lugar errado em silêncio. A única defesa é
 perguntar a alguém que não tem cache.
 
+**~~O núcleo mede o tempo que o backend já controla.~~ Resolvido — não há mais
+`dt`.** A engine tinha um `Clock` medindo o intervalo entre duas chamadas que o
+`pyxel.run` já se comprometia a espaçar. A decisão e o preço estão em *Conceitos*;
+o que vale registrar aqui é o tamanho da subtração:
+
+| saiu | por quê |
+|---|---|
+| `runtime/clock.py` e seus 16 testes | ninguém mede mais nada |
+| a porta `ports/time_provider.py` | uma exigência que o núcleo deixou de fazer |
+| `adapters/stdlib/` inteira | sobrou vazia quando o provider saiu |
+| `adapters/pyxel/pyxel_time_provider.py` | era o arquivo em inglês da lista de acabamento |
+| `max_delta_time`, `reset()`, `elapsed_time` | defesas contra uma variância que não existe mais |
+
+A superfície pública caiu de 19 para 17 nomes e o `Engine.update()` virou uma
+linha. Três testes que defendiam o `Clock` de saltos de tempo — um breakpoint,
+uma pausa, o `pyxel.init()` entre construir e começar — viraram um só, que agora
+afirma o contrato em vez da defesa: **uma chamada do backend é exatamente um
+update da cena**, sem repetição de compensação e sem ninguém pulado.
+
+A migração do código de jogo foi mecânica e a unidade mudou: `PLAYER_SPEED = 70.0`
+px/s virou `1.2` px/frame. Um número menos legível em troca de um laço sem
+relógio — e, num jogo de pixel art travado em 60 fps, px/frame é a unidade que a
+grade de pixels realmente usa.
+
 **~~A ordem de desenho é a ordem da árvore.~~ Feito.** O `Hud` chamava
 `reset_camera()` dentro do `on_render` e dependia de ser o último filho. A cena
 passou a ter duas subárvores — `world` e `ui` —, e é ela que decide o espaço de
@@ -649,10 +692,10 @@ Dois detalhes que a primeira execução revelou e que valia registrar:
   de comparar coisa alguma. Fixado em `py311`, alinhado com o `requires-python` e
   com o ruff.
 
-**Acabamento.** `pyxel_time_provider.py` está comentado em inglês enquanto todo o
-resto está em português. E o `main.py` faz papel de exemplo na raiz enquanto
-`games/` está vazia — mover para `games/demo/` deixaria a raiz só com o que é
-distribuível.
+**Acabamento.** O `main.py` faz papel de exemplo na raiz enquanto `games/` está
+vazia — mover para `games/demo/` deixaria a raiz só com o que é distribuível.
+(O `pyxel_time_provider.py`, comentado em inglês enquanto todo o resto está em
+português, se resolveu por subtração: saiu junto com o `dt`.)
 
 ### Arredondar para a grade: a decisão
 
@@ -710,3 +753,8 @@ mais barato.
     cena, e a cena decidindo o espaço de cada passada. O `Hud` deixou de mexer no
     estado do renderer e a ordem de desenho deixou de depender da posição na
     lista de filhos. 17 testes novos.
+11. ~~**Aposentar o `dt`**~~ — **feito.** Um update é um frame; a cadência é de
+    quem implementa `Application.run`. Saíram o `Clock`, a porta `TimeProvider`,
+    os dois adaptadores de tempo e a pasta `adapters/stdlib/`. É o único passo da
+    lista que a suíte terminou **menor** — 432 testes viraram 411, porque o que
+    saiu não foi cobertura, foi defesa contra um problema que deixou de existir.

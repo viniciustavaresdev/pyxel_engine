@@ -5,7 +5,6 @@ from engine import (
     Anchor,
     ApplicationConfig,
     Camera,
-    Clock,
     Engine,
     Game,
     Input,
@@ -24,20 +23,23 @@ from engine import (
 from engine.adapters.pyxel.pyxel_application import PyxelApplication
 from engine.adapters.pyxel.pyxel_input import PyxelInput
 from engine.adapters.pyxel.pyxel_renderer import PyxelRenderer
-from engine.adapters.stdlib.performance_time_provider import (
-    PerformanceTimeProvider,
-)
 
 SCREEN_WIDTH = 160
 SCREEN_HEIGHT = 120
+FPS = 60
 
 # De proposito muito maior que a tela: e o que torna a camera visivel.
 WORLD_WIDTH = 480
 WORLD_HEIGHT = 360
 
 PLAYER_SIZE = 8.0
-PLAYER_SPEED = 70.0
-SPIN_SPEED = 3.0
+
+# POR FRAME, e nao por segundo: um update e um frame, e a engine nao
+# mede tempo. A 60 fps isto da 72 px/s e 3 rad/s -- mas quem governa e
+# o numero de frames, entao trocar o FPS aqui em cima muda a velocidade
+# do jogo junto.
+PLAYER_SPEED = 1.2
+SPIN_SPEED = 0.05
 
 
 class Action(Enum):
@@ -88,7 +90,7 @@ class Player(VisualNode):
 
         self.color = 11
 
-    def on_update(self, dt: float, input: Input) -> None:
+    def on_update(self, input: Input) -> None:
         # Uma linha no lugar de oito. O no nomeia intencoes; quais
         # teclas as produzem e assunto do mapa -- e get_vector ja
         # devolve normalizado, entao a diagonal nao anda mais rapido
@@ -101,7 +103,7 @@ class Player(VisualNode):
             input,
         )
 
-        position = self.transform.position + direction * PLAYER_SPEED * dt
+        position = self.transform.position + direction * PLAYER_SPEED
 
         # Os limites recuam meia caixa de cada lado: com a origem no
         # centro, prender a posicao em [0, mundo] deixaria metade do
@@ -114,7 +116,7 @@ class Player(VisualNode):
         )
 
         if self.actions.is_pressed(Action.SPIN, input):
-            self.transform.rotation += SPIN_SPEED * dt
+            self.transform.rotation += SPIN_SPEED
         else:
             self.transform.rotation = 0.0
 
@@ -139,8 +141,8 @@ class Satellite(VisualNode):
         self.transform.position = Vector2D(PLAYER_SIZE / 2, 0)
         self.color = 8
 
-    def on_update(self, dt: float, input: Input) -> None:
-        self.transform.rotation += SPIN_SPEED * dt
+    def on_update(self, input: Input) -> None:
+        self.transform.rotation += SPIN_SPEED
 
     def on_render(self, renderer: Renderer) -> None:
         bounds = self.get_world_bounds()
@@ -240,10 +242,6 @@ def main() -> None:
 
     application = PyxelApplication()
 
-    time_provider = PerformanceTimeProvider()
-
-    clock = Clock(time_provider)
-
     scene_manager = SceneManager()
 
     renderer = PyxelRenderer()
@@ -251,7 +249,6 @@ def main() -> None:
     input = PyxelInput()
 
     engine = Engine(
-        clock=clock,
         scene_manager=scene_manager,
         renderer=renderer,
         input=input,
@@ -261,7 +258,7 @@ def main() -> None:
         width=SCREEN_WIDTH,
         height=SCREEN_HEIGHT,
         title="My Game",
-        fps=60,
+        fps=FPS,
     )
 
     game = Game(

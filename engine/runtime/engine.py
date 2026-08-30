@@ -2,22 +2,28 @@ from __future__ import annotations
 
 from engine.ports.input import Input
 from engine.ports.renderer import Renderer
-from engine.runtime.clock import Clock
 from engine.scene.scene import Scene
 from engine.scene.scene_manager import SceneManager
 
 
 class Engine:
+    """O laco de frame, do lado de ca da porta.
+
+    Nao mede tempo. Um `update()` e um frame, e a cadencia e de quem
+    implementa `Application.run` -- no Pyxel, do proprio `pyxel.run`.
+    Um relogio aqui dentro mediria o intervalo entre duas chamadas que
+    o backend ja se comprometeu a espacar, e o resultado dessa medicao
+    (jitter, um salto depois de um breakpoint) so criava trabalho de
+    defesa.
+    """
 
     def __init__(
         self,
-        clock: Clock,
         scene_manager: SceneManager,
         renderer: Renderer,
         input: Input,
         clear_color: int = 0,
     ) -> None:
-        self._clock = clock
         self._scene_manager = scene_manager
         self._renderer = renderer
         self._input = input
@@ -36,11 +42,6 @@ class Engine:
         self._scene_manager.change_scene(scene)
 
     def start(self) -> None:
-        # Antes de marcar running: o Clock ancorou na propria
-        # construcao, e entre aquilo e aqui coube abrir a janela do
-        # backend. Sem o reset esse tempo apareceria no primeiro dt.
-        self._clock.reset()
-
         self._running = True
 
     def stop(self) -> None:
@@ -50,9 +51,7 @@ class Engine:
         if not self._running:
             return
 
-        dt = self._clock.tick()
-
-        self._scene_manager.update(dt, self._input)
+        self._scene_manager.update(self._input)
 
     def render(self) -> None:
         if not self._running:

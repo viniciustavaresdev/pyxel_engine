@@ -67,7 +67,7 @@ class TestInputReachesTheGraph:
         seen = []
 
         class Reader(Node):
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 seen.append(input)
 
         parent = Node("Parent")
@@ -75,7 +75,7 @@ class TestInputReachesTheGraph:
         child.add_child(Reader("Reader"))
         parent.add_child(child)
 
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
 
         assert seen == [spy_input]
 
@@ -83,19 +83,21 @@ class TestInputReachesTheGraph:
         moved = []
 
         class Walker(Node):
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 if input.is_pressed(Key.RIGHT):
-                    moved.append(dt)
+                    moved.append(self.name)
 
         parent = Node("Parent")
         parent.add_child(Walker("Walker"))
 
         spy_input.press(Key.RIGHT)
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
         spy_input.hold(Key.RIGHT)
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
 
-        assert moved == [0.016, 0.016]
+        # Dois frames com a tecla baixa, dois passos. A unidade de
+        # movimento e o frame: nao ha dt para multiplicar.
+        assert moved == ["Walker", "Walker"]
 
     def test_just_pressed_fires_once_per_press(self, spy_input):
         # O caso que motiva os tres estados: com is_pressed, o pulo
@@ -103,7 +105,7 @@ class TestInputReachesTheGraph:
         jumps = []
 
         class Jumper(Node):
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 if input.is_just_pressed(Key.SPACE):
                     jumps.append("jump")
 
@@ -111,10 +113,10 @@ class TestInputReachesTheGraph:
         parent.add_child(Jumper("Jumper"))
 
         spy_input.press(Key.SPACE)
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
         spy_input.hold(Key.SPACE)
-        parent.update(0.016, spy_input)
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
+        parent.update(spy_input)
 
         assert jumps == ["jump"]
 
@@ -122,7 +124,7 @@ class TestInputReachesTheGraph:
         seen = []
 
         class Reader(Node):
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 seen.append(input)
 
         parent = Node("Parent")
@@ -130,7 +132,7 @@ class TestInputReachesTheGraph:
         parent.add_child(reader)
         reader.active = False
 
-        parent.update(0.016, spy_input)
+        parent.update(spy_input)
 
         assert seen == []
 

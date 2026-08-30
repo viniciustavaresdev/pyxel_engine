@@ -386,7 +386,7 @@ class TestActionsInTheTree:
         actions = movement_map()
 
         class Walker(Node):
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 direction = actions.get_vector(
                     Action.MOVE_LEFT,
                     Action.MOVE_RIGHT,
@@ -394,16 +394,18 @@ class TestActionsInTheTree:
                     Action.MOVE_DOWN,
                     input,
                 )
+                # 10 px POR FRAME: sem dt, a velocidade e por frame.
                 self.transform.position = (
-                    self.transform.position + direction * 10.0 * dt
+                    self.transform.position + direction * 10.0
                 )
 
         walker = Walker("Walker")
         spy_input.press(Key.RIGHT)
 
-        walker.update(1.0, spy_input)
+        walker.update(spy_input)
+        walker.update(spy_input)
 
-        assert walker.transform.position.x == 10.0
+        assert walker.transform.position.x == 20.0
 
     def test_rebinding_changes_the_control_without_touching_the_node(
         self, spy_input
@@ -414,15 +416,15 @@ class TestActionsInTheTree:
         jumps = []
 
         class Jumper(Node):
-            def on_update(self, dt, input):
+            def on_update(self, input):
                 if actions.is_just_pressed(Action.JUMP, input):
                     jumps.append(self.name)
 
         jumper = Jumper("Jumper")
 
         spy_input.press(Key.Z)
-        jumper.update(0.016, spy_input)
+        jumper.update(spy_input)
         actions.bind(Action.JUMP, {Key.Z})
-        jumper.update(0.016, spy_input)
+        jumper.update(spy_input)
 
         assert jumps == ["Jumper"]

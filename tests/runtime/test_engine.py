@@ -1,50 +1,45 @@
-import pytest
-
-from engine.runtime.clock import Clock
 from engine.runtime.engine import Engine
 from engine.scene.scene_manager import SceneManager
-from tests.conftest import SpyInput, SpyScene, SpyTimeProvider
+from tests.conftest import SpyInput, SpyScene
 
 
 def build_engine(log, renderer, clear_color=0, input=None):
     """Engine real ligada a um SceneManager real e a dubles nas bordas.
 
-    So o tempo, o desenho e o teclado sao dublados: o objetivo e testar
-    a fiacao entre Engine, Clock e SceneManager, nao substitui-la por
-    mocks.
+    So o desenho e o teclado sao dublados: o objetivo e testar a fiacao
+    entre Engine e SceneManager, nao substitui-la por mocks. Nao ha
+    relogio a dublar -- a Engine nao mede tempo.
     """
-    time = SpyTimeProvider()
     manager = SceneManager()
     manager.change_scene(SpyScene("Level1", log))
     log.clear()
 
     engine = Engine(
-        clock=Clock(time),
         scene_manager=manager,
         renderer=renderer,
         input=input if input is not None else SpyInput(),
         clear_color=clear_color,
     )
 
-    return engine, time
+    return engine
 
 
 class TestRunningState:
 
     def test_starts_stopped(self, log, renderer):
-        engine, _ = build_engine(log, renderer)
+        engine = build_engine(log, renderer)
 
         assert engine.is_running is False
 
     def test_start_sets_running(self, log, renderer):
-        engine, _ = build_engine(log, renderer)
+        engine = build_engine(log, renderer)
 
         engine.start()
 
         assert engine.is_running is True
 
     def test_stop_clears_running(self, log, renderer):
-        engine, _ = build_engine(log, renderer)
+        engine = build_engine(log, renderer)
         engine.start()
 
         engine.stop()
@@ -54,71 +49,53 @@ class TestRunningState:
 
 class TestUpdate:
 
-    def test_feeds_the_clock_delta_into_the_scene(self, log, renderer):
-        engine, time = build_engine(log, renderer)
+    def test_drives_the_scene(self, log, renderer):
+        engine = build_engine(log, renderer)
         engine.start()
 
-        time.advance(0.05)
         engine.update()
 
-        assert log == [("update", "Level1", 0.05)]
+        assert log == [("update", "Level1")]
+
+    def test_one_call_is_exactly_one_update(self, log, renderer):
+        # O contrato do passo fixo: a Engine nao acumula tempo, nao
+        # repete update para "alcancar" o relogio e nao pula nenhum.
+        # Cinco chamadas do backend sao cinco frames de jogo, sempre.
+        engine = build_engine(log, renderer)
+        engine.start()
+
+        for _ in range(5):
+            engine.update()
+
+        assert log == [("update", "Level1")] * 5
 
     def test_does_nothing_while_stopped(self, log, renderer):
-        engine, time = build_engine(log, renderer)
+        engine = build_engine(log, renderer)
 
-        time.advance(0.05)
         engine.update()
 
         assert log == []
 
-    def test_stopped_engine_does_not_tick_the_clock(self, log, renderer):
-        engine, time = build_engine(log, renderer)
+    def test_a_long_pause_does_not_change_the_next_frame(self, log, renderer):
+        # O que este teste substituiu: tres testes que defendiam o
+        # Clock de saltos de tempo -- um breakpoint, uma pausa, o
+        # pyxel.init() entre construir e comecar. Sem medicao, nao ha
+        # salto a conter: o frame depois da pausa e igual a qualquer
+        # outro, e nao por um teto de dt segurando o valor.
+        engine = build_engine(log, renderer)
 
-        time.advance(2.0)
         engine.update()
-
-        assert engine._clock.elapsed_time == 0.0
-
-    def test_time_spent_paused_does_not_leak_into_the_first_frame(
-        self, log, renderer
-    ):
-        # start() re-ancora o Clock, entao retomar depois de 2s parado
-        # da um frame normal em vez de um salto de 0.1s (o teto do
-        # clamp, que era tudo que segurava isto antes).
-        engine, time = build_engine(log, renderer)
-
-        time.advance(2.0)
-        engine.update()
-
         engine.start()
         engine.update()
 
-        assert log == [("update", "Level1", 0.0)]
-
-    def test_time_spent_before_the_first_start_does_not_leak_either(
-        self, log, renderer
-    ):
-        # Mesmo mecanismo, no caso real: entre construir o Clock e
-        # chamar start() cabe o pyxel.init() abrindo a janela.
-        engine, time = build_engine(log, renderer)
-
-        time.advance(3.0)
-        engine.start()
-
-        time.advance(0.05)
-        engine.update()
-
-        # approx: 3.05 - 3.0 nao fecha exato em float.
-        assert len(log) == 1
-        assert log[0][:2] == ("update", "Level1")
-        assert log[0][2] == pytest.approx(0.05)
+        assert log == [("update", "Level1")]
 
 
 class TestRender:
 
     def test_clears_before_drawing_the_scene(self, log, renderer):
         # A ordem importa: limpar depois apagaria o frame inteiro.
-        engine, _ = build_engine(log, renderer)
+        engine = build_engine(log, renderer)
         engine.start()
 
         engine.render()
@@ -129,7 +106,7 @@ class TestRender:
         assert log == [("render", "Level1")]
 
     def test_uses_the_configured_clear_color(self, log, renderer):
-        engine, _ = build_engine(log, renderer, clear_color=7)
+        engine = build_engine(log, renderer, clear_color=7)
         engine.start()
 
         engine.render()
@@ -137,7 +114,7 @@ class TestRender:
         assert renderer.calls == [("clear", 7), ("reset_camera",)]
 
     def test_does_nothing_while_stopped(self, log, renderer):
-        engine, _ = build_engine(log, renderer)
+        engine = build_engine(log, renderer)
 
         engine.render()
 
@@ -151,7 +128,6 @@ class TestWithoutScene:
         # Regressao do bug do main.py: sem cena registrada o loop tem
         # de seguir girando e apenas limpar a tela, nao explodir.
         engine = Engine(
-            clock=Clock(SpyTimeProvider()),
             scene_manager=SceneManager(),
             renderer=renderer,
             input=SpyInput(),

@@ -181,7 +181,7 @@ class TestAnOrphanedCameraStopsFraming:
         scene.camera = camera
 
         camera.queue_free()
-        scene.update(0.016, spy_input)
+        scene.update(spy_input)
         scene.render(renderer)
 
         assert renderer.calls == [("reset_camera",)]

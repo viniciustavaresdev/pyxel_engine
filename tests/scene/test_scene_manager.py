@@ -72,9 +72,9 @@ class TestDelegation:
         manager.change_scene(SpyScene("Level1", log))
         log.clear()
 
-        manager.update(0.5, spy_input)
+        manager.update(spy_input)
 
-        assert log == [("update", "Level1", 0.5)]
+        assert log == [("update", "Level1")]
 
     def test_render_reaches_the_current_scene(self, log, renderer):
         manager = SceneManager()
@@ -92,15 +92,15 @@ class TestDelegation:
         manager.change_scene(SpyScene("Level2", log))
         log.clear()
 
-        manager.update(0.5, spy_input)
+        manager.update(spy_input)
 
-        assert log == [("update", "Level2", 0.5)]
+        assert log == [("update", "Level2")]
 
 
 class TestWithoutScene:
 
     def test_update_without_a_scene_is_a_no_op(self, spy_input):
-        SceneManager().update(0.5, spy_input)
+        SceneManager().update(spy_input)
 
     def test_render_without_a_scene_is_a_no_op(self, renderer):
         manager = SceneManager()

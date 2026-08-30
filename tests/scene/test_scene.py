@@ -39,9 +39,9 @@ class TestSceneAsGraphRoot:
         scene = Scene("Level1")
         scene.add_child(SpyNode("Child", log))
 
-        scene.update(0.25, spy_input)
+        scene.update(spy_input)
 
-        assert log == [("update", "Child", 0.25)]
+        assert log == [("update", "Child")]
 
     def test_propagates_render_to_its_children(self, log, renderer):
         scene = Scene("Level1")

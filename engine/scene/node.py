@@ -213,11 +213,25 @@ class Node:
         pass
 
     # Update
-    def update(self, dt: float, input: Input) -> None:
+    def update(self, input: Input) -> None:
+        """Um update e UM FRAME. Nao ha dt, e isso e uma decisao.
+
+        Quem e dono do laco e a porta `Application` -- `pyxel.run`
+        chama isto a uma cadencia fixa, e medir o tempo aqui dentro
+        seria o nucleo refazendo uma conta que a infraestrutura ja fez.
+        A variancia que sobrava daquela medicao era o unico motivo de
+        existir um teto de dt; sem medir, a classe inteira de bug (um
+        breakpoint virando um salto que atravessa paredes) deixa de
+        existir em vez de ser contida.
+
+        A contrapartida esta no codigo de jogo: velocidade passa a ser
+        POR FRAME, e a taxa do `ApplicationConfig` passa a governar a
+        fisica. Trocar 60 por 30 ali deixa tudo duas vezes mais lento.
+        """
         if not self.active:
             return
 
-        self.on_update(dt, input)
+        self.on_update(input)
 
         # tuple(): on_update pode ter adicionado ou removido filhos.
         # Iterar a lista viva faria o traversal pular nos em silencio.
@@ -226,7 +240,7 @@ class Node:
         for child in tuple(self.children):
             # Pode ter sido removido por um irmao que ja rodou.
             if child.parent is self:
-                child.update(dt, input)
+                child.update(input)
 
         # So a raiz coleta, e so depois de a travessia inteira acabar:
         # um instante unico e deterministico de remocao por frame, em
@@ -234,7 +248,7 @@ class Node:
         if self.parent is None:
             self._flush_pending_removals()
 
-    def on_update(self, dt: float, input: Input) -> None:
+    def on_update(self, input: Input) -> None:
         pass
 
     def _flush_pending_removals(self) -> None:

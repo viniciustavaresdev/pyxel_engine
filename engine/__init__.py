@@ -27,9 +27,7 @@ from engine.math.vector2d import Vector2D
 from engine.ports.application import Application
 from engine.ports.input import Input
 from engine.ports.renderer import Renderer
-from engine.ports.time_provider import TimeProvider
 from engine.runtime.application_config import ApplicationConfig
-from engine.runtime.clock import Clock
 from engine.runtime.engine import Engine
 from engine.runtime.game import Game
 from engine.scene.camera import Camera
@@ -52,7 +50,6 @@ __all__ = [
     "VisualNode",
     # runtime -- o laco de frame
     "ApplicationConfig",
-    "Clock",
     "Engine",
     "Game",
     # input
@@ -62,5 +59,4 @@ __all__ = [
     "Application",
     "Input",
     "Renderer",
-    "TimeProvider",
 ]

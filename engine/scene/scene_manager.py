@@ -28,11 +28,11 @@ class SceneManager:
         self._current_scene = scene
         self._current_scene.enter()
 
-    def update(self, dt: float, input: Input) -> None:
+    def update(self, input: Input) -> None:
         if self._current_scene is None:
             return
 
-        self._current_scene.update(dt, input)
+        self._current_scene.update(input)
 
     def render(self, renderer: Renderer) -> None:
         if self._current_scene is None:
