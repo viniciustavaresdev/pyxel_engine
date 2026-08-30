@@ -20,7 +20,7 @@ venv\Scripts\activate          # Windows
 pip install -e ".[dev]"
 
 python main.py                 # a demo
-pytest                         # 378 testes, sem janela
+pytest                         # 432 testes, sem janela
 ```
 
 Verificação (as três precisam passar limpas):
@@ -219,6 +219,47 @@ O enquadramento é aplicado na raiz, pela `Scene`, e não no `on_render` de algu
 nó: se dependesse da ordem de visita, bastaria alguém reordenar os filhos para
 metade da cena desenhar com o enquadramento errado.
 
+### Camadas — `world` e `ui`, e quem decide o espaço
+
+Toda `Scene` nasce com duas subárvores. `world` desenha enquadrada pela câmera;
+`ui` desenha em coordenadas de tela, **depois** do mundo inteiro:
+
+```python
+self.world.add_child(player)
+self.ui.add_child(Hud("Hud", player))     # a ordem aqui não importa
+```
+
+O que isso substituiu: um HUD que chamava `reset_camera()` dentro do próprio
+`on_render` e só estava correto enquanto fosse o último filho da cena. Era estado
+global do renderer alterado no meio da travessia, com uma dependência de ordem
+que ninguém declarava — e que qualquer `add_child` a mais quebrava em silêncio.
+Agora a passada de UI é da cena, que já era quem decidia o enquadramento.
+
+Três coisas que a implementação fixa:
+
+- **As camadas são `Node`s comuns**, filhas da cena. Ganham `update`,
+  `enter`/`exit` e a fila de remoção pelos caminhos que já existiam, sem uma
+  linha nova. Camada aqui é ordem e espaço de desenho, e nada mais.
+- **Só leitura.** Trocar `scene.ui` por outro nó deixaria a camada antiga
+  pendurada na cena, ainda desenhando, e o `render` procurando a nova. O mypy
+  recusa a atribuição e o runtime também — a proteção não depende de alguém
+  rodar o checador.
+- **Camada de UI vazia não custa chamada nenhuma.** Uma cena que não usa UI tem
+  exatamente o mesmo tráfego de renderer de antes das camadas, e o `reset_camera`
+  aparece no frame por um motivo visível, em vez de por cerimônia.
+
+Pendurar direto na cena continua valendo e continua caindo em espaço de mundo: a
+UI é a única exceção, e ela é declarada. O que `world` acrescenta é poder tratar
+o mundo como uma coisa só — e é aí que um menu de pausa vira uma linha:
+
+```python
+scene.world.active = False      # o mundo congela; a UI segue viva
+scene.world.visible = False     # o mundo some; o menu fica
+```
+
+São os dois portões do `Node` (`active` e `visible`) aplicados a uma camada
+inteira. `z_index` dentro de uma camada continua fora, até um jogo pedir.
+
 ### Clock — dt com teto
 
 `max_delta_time` de 0,1 s por padrão: um breakpoint ou um travamento do sistema
@@ -235,6 +276,56 @@ pulo disparar em todo frame com a tecla baixa.
 O enum `Key` é próprio, e existe um teste que falha se uma tecla nova não for
 mapeada no adaptador — transformando um `KeyError` em pleno jogo numa falha de
 build.
+
+### ActionMap — de teclas para intenções
+
+`is_pressed(Key.LEFT) or is_pressed(Key.A)`, repetido em quatro linhas, é código
+de jogo enumerando teclas onde queria nomear uma intenção — e a lista se repete
+em todo lugar que precisa dela. O `ActionMap` guarda essa lista uma vez:
+
+```python
+class Action(Enum):          # o vocabulário é do JOGO, não da engine
+    MOVE_LEFT = auto()
+    ...
+
+actions = ActionMap({Action.MOVE_LEFT: {Key.LEFT, Key.A}, ...})
+
+direction = actions.get_vector(
+    Action.MOVE_LEFT, Action.MOVE_RIGHT, Action.MOVE_UP, Action.MOVE_DOWN, input
+)
+```
+
+**Genérico no tipo da ação, e não fixado em `str`.** `Key` a engine precisa
+possuir — é o que mantém o `import pyxel` fora do código de jogo —, mas "pular" e
+"girar" são vocabulário de quem está sendo escrito, e uma engine que enumerasse
+ações estaria adivinhando o jogo. Com `ActionMap[Action]` e o `Enum` do jogo, um
+nome errado é erro de mypy; quem preferir strings usa `ActionMap[str]` e paga a
+diferença em `KeyError`.
+
+O mapa **não guarda o input**: recebe um a cada pergunta. Sem estado próprio além
+das amarrações, o mesmo mapa serve à árvore inteira e continua respondendo pelo
+frame que o laço está passando, sem nenhuma sincronia para manter.
+
+Três decisões que valem estar escritas:
+
+- **Ação não amarrada levanta**, em vez de devolver "não pressionada". É o modo
+  de falha mais caro que este mapa poderia ter: o jogo roda, o botão não faz
+  nada, e não há uma linha de erro para procurar. Amarrar ao conjunto vazio é
+  outra coisa — um controle desligado de propósito — e responde `False`.
+- **`is_just_pressed` é da AÇÃO, não da tecla.** Com ESPAÇO segurado, tocar Z
+  não dispara um segundo pulo com o jogador já no ar: a ação já estava valendo, o
+  que mudou foi só por qual tecla. E é respondido sem memória de frame — uma
+  tecla baixa que *não* desceu agora já estava baixa antes. `is_just_released` é
+  o espelho: soltar ESPAÇO com o Z ainda baixo não solta o tiro carregado.
+- **`get_vector` normaliza.** É para onde foi a normalização manual de diagonal
+  do `Player`; sem ela a diagonal anda 41% mais rápido que a reta, e todo jogo
+  redescobre isso sozinho. `get_axis` dá o eixo cru: as duas direções ao mesmo
+  tempo se anulam, porque a alternativa ("a última vence") exige memória, e um
+  eixo com memória é um eixo que discorda do teclado depois de uma pausa.
+
+`bind()` **substitui** em vez de acumular: é a operação de uma tela de
+remapeamento, e acumular deixaria a tecla antiga respondendo junto com a nova —
+exatamente o que o jogador pediu para não acontecer.
 
 ---
 
@@ -263,7 +354,7 @@ engine/
 ├── runtime/         o laço de frame e a composição do jogo
 │   └── engine.py  game.py  clock.py  application_config.py
 ├── input/           vocabulário de entrada
-│   └── key.py
+│   └── key.py  action_map.py
 ├── ports/           o que a engine exige do mundo
 │   └── renderer.py  input.py  application.py  time_provider.py
 └── adapters/        quem cumpre a exigência
@@ -287,7 +378,7 @@ dois eixos de nomeação (`pyxel/` pelo backend, `time/` pela porta — virou
 
 ### A superfície pública
 
-`engine/__init__.py` reexporta os 18 nomes que um jogo realmente usa. O que está
+`engine/__init__.py` reexporta os 19 nomes que um jogo realmente usa. O que está
 lá é contrato; o resto é detalhe interno, livre para mudar de módulo sem aviso.
 
 ```python
@@ -319,10 +410,15 @@ verdade por nunca ninguém carregá-lo. A checagem roda em subprocesso, porque
 ## Estado atual e próximos passos
 
 A separação núcleo/backend está sólida, os dois bugs de ciclo de vida estão
-fechados, as duas decisões de baixo nível foram tomadas e a engine cabe no
-orçamento de frame. O que resta são confortos de código de jogo, que só valem
-quando um jogo pedir — e a ausência de controle de versão, que segue sendo o
-maior buraco da lista.
+fechados, as duas decisões de baixo nível foram tomadas, a engine cabe no
+orçamento de frame e o projeto está sob controle de versão. **Os dez passos da
+sequência estão feitos** — os dois últimos, mapa de ações e camadas de render,
+são os que se sentem escrevendo jogo em vez de engine.
+
+O que resta não é sequência, é lista de espera: resposta a colisão, `z_index`,
+`find_child`, o tamanho de tela que vive em dois lugares, e o acabamento. Cada um
+entra quando um jogo pedir — e um jogo é o que falta para saber qual pede
+primeiro.
 
 ### Bugs confirmados
 
@@ -477,17 +573,35 @@ arquivo de teste como oráculo. Um cache errado não levanta exceção: devolve 
 valor de ontem, e o jogo desenha no lugar errado em silêncio. A única defesa é
 perguntar a alguém que não tem cache.
 
-**A ordem de desenho é a ordem da árvore.** O `Hud` chama `reset_camera()` dentro
-do `on_render` e depende de ser o último filho — estado global do renderer
-alterado no meio da travessia, mais uma dependência de ordem que ninguém declara.
-Separar *espaço* de *ordem*: a cena passa a ter duas subárvores (`world` e `ui`),
-e é ela que decide o enquadramento de cada uma. `z_index` só quando um jogo pedir.
+**~~A ordem de desenho é a ordem da árvore.~~ Feito.** O `Hud` chamava
+`reset_camera()` dentro do `on_render` e dependia de ser o último filho. A cena
+passou a ter duas subárvores — `world` e `ui` —, e é ela que decide o espaço de
+cada passada; o `Hud` perdeu a linha de `reset_camera` e não ganhou nenhuma no
+lugar. As decisões estão em *Conceitos*, com 17 testes atrás delas.
 
-**O código de jogo enumera teclas onde deveria nomear intenções.**
-`is_pressed(Key.LEFT) or is_pressed(Key.A)` se repete quatro vezes no `main.py`.
-Um mapa de ações (`Action.MOVE_LEFT → {Key.LEFT, Key.A}`) mora no núcleo, é
-testável sem backend nenhum, e é o degrau antes de `get_axis("horizontal")` — que
-apagaria a normalização manual de diagonal do `Player`.
+Duas coisas que a implementação mostrou e que não estavam no plano:
+
+- **A camada dá o menu de pausa de graça.** `scene.world.active = False` congela
+  o mundo e mantém a UI viva — os dois portões do `Node` aplicados a uma camada
+  inteira. Era a justificativa que faltava para `world` existir, já que filho
+  direto da cena sempre desenhou em espaço de mundo.
+- **Dois testes antigos afirmavam que uma `Scene` nasce vazia.** Não nasce mais:
+  as camadas são filhas comuns, criadas no construtor. Os dois passaram a cobrar
+  o que de fato queriam dizer — que o nó marcado saiu da árvore, e não que a
+  lista de filhos ficou vazia.
+
+`z_index` dentro de uma camada continua fora, até um jogo pedir.
+
+**~~O código de jogo enumera teclas onde deveria nomear intenções.~~ Feito.**
+`ActionMap` mora no núcleo e só fala com a porta `Input`, então é exercitável sem
+backend nenhum — os 37 testes novos rodam sem abrir janela. No `main.py` o
+`on_update` do `Player` caiu de oito linhas de teclado para uma chamada de
+`get_vector`, e a normalização manual de diagonal sumiu junto: ela agora é
+garantia do método, e não lembrança de quem escreve o nó.
+
+O que a implementação acrescentou ao plano foram as arestas de ação com **mais de
+uma tecla** — `is_just_pressed`/`is_just_released` perguntam se a *ação* mudou de
+estado, não se alguma tecla mudou. Estão em *Conceitos*, com teste cada uma.
 
 **~~`Rect` só serve de região de sprite.~~ Completo.** Ganhou `center`,
 `from_center_size`, `contains`, `intersects` e `normalized`, e virou o tipo de
@@ -506,17 +620,13 @@ achar um nó só funciona guardando a referência na construção da cena.
 
 ### Processo
 
-**O projeto não está sob controle de versão.** É o maior buraco da lista e o mais
-barato de tapar. Sem git não há histórico, não há `bisect`, não há volta de um
-refactor errado — e tudo acima é refactor. O `venv/` está dentro da árvore, então
-o `.gitignore` não é opcional:
-
-```
-venv/
-__pycache__/
-.pytest_cache/
-*.egg-info/
-```
+**~~O projeto não está sob controle de versão.~~ Resolvido.** `git init` feito, e
+o `.gitignore` veio junto — não era opcional, porque o `venv/` mora dentro da
+árvore e o primeiro `git add .` teria levado o Pyxel, o mypy e o resto junto.
+Além dele, ficam de fora o bytecode, o `*.egg-info/` da instalação editável e os
+três caches de ferramenta (`.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`) —
+estes últimos já escrevem um `.gitignore` próprio lá dentro, e estão listados
+para que a regra não dependa de a ferramenta continuar fazendo isso.
 
 **~~O rigor prometido no `pyproject.toml` nunca foi exercido.~~ Resolvido.**
 `ruff`, `black` e `mypy --strict` estavam declarados e nenhum instalado. A linha
@@ -568,8 +678,8 @@ cenário inteiro tremendo é o sintoma clássico.
 Não é lista de desejos, é sequência: cada passo torna o seguinte mais seguro ou
 mais barato.
 
-1. **`git init` + `.gitignore`** — antes de qualquer coisa. Tudo que vem depois é
-   refactor, e refactor sem histórico é aposta. *(pendente)*
+1. ~~**`git init` + `.gitignore`**~~ — **feito.** Antes de qualquer coisa, porque
+   tudo que vem depois é refactor, e refactor sem histórico é aposta.
 2. ~~**Instalar as dev deps e rodar ruff, black e mypy**~~ — **feito.** As três
    passam limpas, e daqui em diante o que aparecer é regressão, não dívida.
 3. ~~**Fila de remoção na raiz**~~ — **feito.** 10 testes novos cobrindo o bug e
@@ -592,5 +702,11 @@ mais barato.
    à mão — a medição mostrou que um `__setattr__` encarece a *construção* em 20x,
    e o caminho de render constrói muito. 41 testes novos, um deles conferindo
    cada mexida contra a implementação sem cache.
-9. **Mapa de ações** — o primeiro ganho que se sente escrevendo jogo, não engine.
-10. **Camadas de render** — quando o HUD incomodar de verdade.
+9. ~~**Mapa de ações**~~ — **feito.** O primeiro ganho que se sente escrevendo
+   jogo, e não engine: o `on_update` do `Player` passou a nomear intenções, e a
+   lista de teclas passou a existir em um lugar só. 37 testes novos, a maior
+   parte deles nas arestas de ação com mais de uma tecla.
+10. ~~**Camadas de render**~~ — **feito.** `world` e `ui` como subárvores da
+    cena, e a cena decidindo o espaço de cada passada. O `Hud` deixou de mexer no
+    estado do renderer e a ordem de desenho deixou de depender da posição na
+    lista de filhos. 17 testes novos.

@@ -1,4 +1,7 @@
+from enum import Enum, auto
+
 from engine import (
+    ActionMap,
     Anchor,
     ApplicationConfig,
     Camera,
@@ -37,6 +40,31 @@ PLAYER_SPEED = 70.0
 SPIN_SPEED = 3.0
 
 
+class Action(Enum):
+    # O vocabulario deste jogo, e nao da engine: "girar" nao e um
+    # conceito que uma engine 2D possa enumerar de antemao. O Enum e do
+    # jogo, e por ser um Enum um nome errado quebra no mypy, antes de
+    # virar um controle que nao responde.
+    MOVE_LEFT = auto()
+    MOVE_RIGHT = auto()
+    MOVE_UP = auto()
+    MOVE_DOWN = auto()
+    SPIN = auto()
+
+
+# A lista de teclas mora AQUI, uma vez. Antes ela se repetia em quatro
+# linhas do on_update do Player -- e remapear era caçar todas.
+DEMO_BINDINGS: ActionMap[Action] = ActionMap(
+    {
+        Action.MOVE_LEFT: {Key.LEFT, Key.A},
+        Action.MOVE_RIGHT: {Key.RIGHT, Key.D},
+        Action.MOVE_UP: {Key.UP, Key.W},
+        Action.MOVE_DOWN: {Key.DOWN, Key.S},
+        Action.SPIN: {Key.SPACE},
+    }
+)
+
+
 class Player(VisualNode):
     # Le o teclado pela porta Input. Nenhum `import pyxel` aqui: o no
     # nao sabe em que backend esta rodando.
@@ -46,34 +74,34 @@ class Player(VisualNode):
     # o satelite orbitar o meio do quadrado e a camera enquadrar o meio
     # do quadrado, sem uma linha de correcao em nenhum dos dois.
 
-    def __init__(self, name: str | None = None) -> None:
+    def __init__(
+        self,
+        name: str | None = None,
+        actions: ActionMap[Action] | None = None,
+    ) -> None:
         super().__init__(name, size=Vector2D(PLAYER_SIZE, PLAYER_SIZE))
+
+        # O mapa chega pelo construtor, e nao como global: e
+        # configuracao do jogo, e um no que a recebe pode ser exercitado
+        # com outro mapa sem tocar em nada aqui dentro.
+        self.actions = actions if actions is not None else DEMO_BINDINGS
 
         self.color = 11
 
     def on_update(self, dt: float, input: Input) -> None:
-        # Acumula em escalares e monta o vetor uma vez so. Vector2D e
-        # imutavel, entao `direction.x -= 1` nao existe -- e o estilo
-        # que sobra e mais direto do que o que ele substituiu.
-        horizontal = 0.0
-        vertical = 0.0
-
-        if input.is_pressed(Key.LEFT) or input.is_pressed(Key.A):
-            horizontal -= 1.0
-        if input.is_pressed(Key.RIGHT) or input.is_pressed(Key.D):
-            horizontal += 1.0
-        if input.is_pressed(Key.UP) or input.is_pressed(Key.W):
-            vertical -= 1.0
-        if input.is_pressed(Key.DOWN) or input.is_pressed(Key.S):
-            vertical += 1.0
-
-        direction = Vector2D(horizontal, vertical)
-
-        # normalized() evita andar mais rapido na diagonal.
-        position = (
-            self.transform.position
-            + direction.normalized() * PLAYER_SPEED * dt
+        # Uma linha no lugar de oito. O no nomeia intencoes; quais
+        # teclas as produzem e assunto do mapa -- e get_vector ja
+        # devolve normalizado, entao a diagonal nao anda mais rapido
+        # sem que ninguem precise lembrar disso aqui.
+        direction = self.actions.get_vector(
+            Action.MOVE_LEFT,
+            Action.MOVE_RIGHT,
+            Action.MOVE_UP,
+            Action.MOVE_DOWN,
+            input,
         )
+
+        position = self.transform.position + direction * PLAYER_SPEED * dt
 
         # Os limites recuam meia caixa de cada lado: com a origem no
         # centro, prender a posicao em [0, mundo] deixaria metade do
@@ -85,7 +113,7 @@ class Player(VisualNode):
             min(max(position.y, half), WORLD_HEIGHT - half),
         )
 
-        if input.is_pressed(Key.SPACE):
+        if self.actions.is_pressed(Action.SPIN, input):
             self.transform.rotation += SPIN_SPEED * dt
         else:
             self.transform.rotation = 0.0
@@ -108,7 +136,7 @@ class Satellite(VisualNode):
     def __init__(self, name: str | None = None) -> None:
         super().__init__(name, size=Vector2D(3.0, 3.0))
 
-        self.transform.position = Vector2D(PLAYER_SIZE/2, 0)
+        self.transform.position = Vector2D(PLAYER_SIZE / 2, 0)
         self.color = 8
 
     def on_update(self, dt: float, input: Input) -> None:
@@ -145,13 +173,14 @@ class Landmark(VisualNode):
 
 
 class Hud(Node):
-    # Desenha em coordenadas de TELA: reset_camera desfaz o
-    # enquadramento aplicado pela cena, entao o texto nao rola junto
-    # com o mundo.
+    # Desenha em coordenadas de TELA -- e nao faz nada para isso. Vive
+    # na camada `ui` da cena, e e a cena que sai do enquadramento antes
+    # da passada dela.
     #
-    # Depende de ser o ultimo filho a desenhar. A solucao propria e uma
-    # camada de render dedicada -- que ainda nao existe, junto com o
-    # z-index.
+    # Antes, este no chamava reset_camera() no proprio on_render e
+    # dependia de ser o ultimo filho a desenhar: estado global do
+    # renderer alterado no meio da travessia, com uma ordem que ninguem
+    # declarava em lugar nenhum.
 
     def __init__(self, name: str | None = None, player: Node | None = None):
         super().__init__(name)
@@ -159,8 +188,6 @@ class Hud(Node):
         self.player = player
 
     def on_render(self, renderer: Renderer) -> None:
-        renderer.reset_camera()
-
         renderer.draw_text(Vector2D(4.0, 4.0), "WASD/SETAS mover", 7)
         renderer.draw_text(Vector2D(4.0, 12.0), "ESPACO girar", 7)
 
@@ -178,15 +205,11 @@ class DemoScene(Scene):
     def __init__(self, name: str | None = None) -> None:
         super().__init__(name)
 
-        player = Player("Player")
-        player.transform.position = Vector2D(
-           0,0
-        )
+        player = Player("Player", DEMO_BINDINGS)
+        player.transform.position = Vector2D(0.0, 0.0)
 
         satellite = Satellite("Satellite")
-        lua = Satellite("lua")
 
-        #satellite.add_child(lua)
         player.add_child(satellite)
 
         # Pendurada no jogador: a camera o segue pela propria transform
@@ -201,12 +224,16 @@ class DemoScene(Scene):
 
         for x in range(0, WORLD_WIDTH, 60):
             for y in range(0, WORLD_HEIGHT, 60):
-                self.add_child(
+                self.world.add_child(
                     Landmark(f"Landmark{x}_{y}", Vector2D(float(x), float(y)))
                 )
 
-        self.add_child(player)
-        self.add_child(Hud("Hud", player))
+        # Cada um na camada que diz em que espaco desenha. A ordem em
+        # que aparecem aqui deixou de importar: a UI desenha depois do
+        # mundo porque e a cena que decide isso, e nao a posicao na
+        # lista de filhos.
+        self.world.add_child(player)
+        self.ui.add_child(Hud("Hud", player))
 
 
 def main() -> None:

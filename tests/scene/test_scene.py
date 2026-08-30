@@ -17,10 +17,13 @@ class TestSceneIsANode:
     def test_name_is_optional(self):
         assert Scene().name is None
 
-    def test_starts_empty_and_unparented(self):
+    def test_starts_with_the_two_layers_and_no_parent(self):
+        # Nao nasce vazia: as duas camadas de render sao filhas comuns,
+        # criadas no construtor. E o que faz update, enter/exit e a fila
+        # de remocao valerem para elas sem uma linha nova.
         scene = Scene("Level1")
 
-        assert scene.children == []
+        assert scene.children == [scene.world, scene.ui]
         assert scene.parent is None
 
     def test_starts_with_a_default_transform(self):

@@ -18,6 +18,7 @@ A linha mais longa e a que amarra o jogo a um backend. E bom que doa
 um pouco.
 """
 
+from engine.input.action_map import ActionMap
 from engine.input.key import Key
 from engine.math.anchor import Anchor
 from engine.math.rect import Rect
@@ -55,6 +56,7 @@ __all__ = [
     "Engine",
     "Game",
     # input
+    "ActionMap",
     "Key",
     # ports -- para quem escreve um adaptador ou um duble de teste
     "Application",

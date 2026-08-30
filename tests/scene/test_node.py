@@ -880,7 +880,11 @@ class TestQueueFreeOnAScene:
         doomed.queue_free()
         scene.update(0.016, spy_input)
 
-        assert scene.children == []
+        # Sobram as duas camadas, que a cena cria no construtor: o que
+        # o teste cobra e que o no marcado saiu, e nao que a cena ficou
+        # vazia.
+        assert doomed not in scene.children
+        assert doomed.parent is None
 
 
 def build_chain(depth):
