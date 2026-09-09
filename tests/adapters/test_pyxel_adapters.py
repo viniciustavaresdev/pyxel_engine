@@ -7,18 +7,22 @@ so o Pyxel poderia responder.
 """
 
 import math
+from typing import Any
 
 import pyxel
 
 from engine.adapters.pyxel.pyxel_application import PyxelApplication
 from engine.adapters.pyxel.pyxel_input import _PYXEL_KEYS, PyxelInput
+from engine.adapters.pyxel.pyxel_pointer import PyxelPointer
 from engine.adapters.pyxel.pyxel_renderer import PyxelRenderer
 from engine.input.key import Key
 from engine.math.rect import Rect
 from engine.math.vector2d import Vector2D
 from engine.ports.application import Application
 from engine.ports.input import Input
+from engine.ports.pointer import Pointer
 from engine.ports.renderer import Renderer
+from engine.runtime.application_config import ApplicationConfig
 
 
 class TestKeyMapCompleteness:
@@ -43,6 +47,28 @@ class TestKeyMapCompleteness:
     def test_constants_are_integers(self):
         assert all(isinstance(value, int) for value in _PYXEL_KEYS.values())
 
+    def test_the_mouse_buttons_are_mapped_like_any_other_key(self):
+        # O ganho de os botoes terem entrado no `Key` em vez de num
+        # enum proprio: o teste de completude acima passou a cobri-los
+        # de graca, e este so nomeia o caso para que a intencao fique
+        # legivel quando alguem acrescentar MOUSE_MIDDLE.
+        assert _PYXEL_KEYS[Key.MOUSE_LEFT] == pyxel.MOUSE_BUTTON_LEFT
+        assert _PYXEL_KEYS[Key.MOUSE_RIGHT] == pyxel.MOUSE_BUTTON_RIGHT
+
+    def test_a_mouse_button_is_not_a_keyboard_constant(self):
+        # Os dois vivem no mesmo mapa, mas nao no mesmo espaco de
+        # valores do Pyxel. Se um dia colidirem, `btn` responderia pela
+        # tecla errada -- e o teste de constantes distintas acima ja
+        # falharia; este diz por que aquele importa.
+        keyboard = {
+            value
+            for key, value in _PYXEL_KEYS.items()
+            if key not in (Key.MOUSE_LEFT, Key.MOUSE_RIGHT)
+        }
+
+        assert _PYXEL_KEYS[Key.MOUSE_LEFT] not in keyboard
+        assert _PYXEL_KEYS[Key.MOUSE_RIGHT] not in keyboard
+
 
 class TestAdaptersSatisfyTheirPorts:
     """Cada adaptador tem de implementar a porta inteira.
@@ -60,6 +86,139 @@ class TestAdaptersSatisfyTheirPorts:
 
     def test_pyxel_input(self):
         assert isinstance(PyxelInput(), Input)
+
+    def test_pyxel_pointer(self):
+        assert isinstance(PyxelPointer(), Pointer)
+
+
+class TestPyxelApplicationAppliesTheConfig:
+    """O que o `initialize` faz alem de abrir a janela.
+
+    Monkeypatch em tudo: `pyxel.init` de verdade abriria janela, e o
+    que precisa ser travado aqui e a ORDEM -- nem cursor nem banco de
+    imagem existem antes de haver janela.
+    """
+
+    def _record(self, monkeypatch):
+        # Anotado porque as tres chamadas tem aridades diferentes: sem
+        # isto o mypy fixa o tipo da lista na primeira delas.
+        calls: list[tuple[Any, ...]] = []
+
+        monkeypatch.setattr(
+            pyxel, "init", lambda *a, **k: calls.append(("init", a, k))
+        )
+        monkeypatch.setattr(
+            pyxel, "mouse", lambda visible: calls.append(("mouse", visible))
+        )
+        monkeypatch.setattr(
+            pyxel, "load", lambda path: calls.append(("load", path))
+        )
+
+        return calls
+
+    def test_the_cursor_is_hidden_by_default(self, monkeypatch):
+        # O default do proprio Pyxel, e o certo para um jogo so de
+        # teclado: ninguem deve ganhar um cursor por acidente.
+        calls = self._record(monkeypatch)
+
+        PyxelApplication().initialize(
+            ApplicationConfig(width=160, height=120, title="T")
+        )
+
+        assert ("mouse", False) in calls
+
+    def test_show_cursor_reaches_the_backend(self, monkeypatch):
+        calls = self._record(monkeypatch)
+
+        PyxelApplication().initialize(
+            ApplicationConfig(
+                width=160, height=120, title="T", show_cursor=True
+            )
+        )
+
+        assert ("mouse", True) in calls
+
+    def test_the_cursor_is_set_after_the_window_exists(self, monkeypatch):
+        # Antes do init nao ha janela, e portanto nao ha estado de
+        # cursor para ligar. Mesma regra do `load`.
+        calls = self._record(monkeypatch)
+
+        PyxelApplication().initialize(
+            ApplicationConfig(
+                width=160,
+                height=120,
+                title="T",
+                show_cursor=True,
+                resource_path="game.pyxres",
+            )
+        )
+
+        names = [call[0] for call in calls]
+
+        assert names == ["init", "mouse", "load"]
+
+    def test_no_resource_means_no_load(self, monkeypatch):
+        calls = self._record(monkeypatch)
+
+        PyxelApplication().initialize(
+            ApplicationConfig(width=160, height=120, title="T")
+        )
+
+        assert [call[0] for call in calls] == ["init", "mouse"]
+
+
+class TestPyxelPointerReadsTheCursor:
+    """A leitura do cursor, sem abrir janela.
+
+    Monkeypatch nos atributos de modulo do Pyxel: sem `pyxel.init()`
+    eles existem zerados, e o que precisa ser travado aqui e a
+    CONVERSAO -- inteiros do backend viram float da engine, em um
+    Vector2D e em coordenadas de tela.
+    """
+
+    def test_it_reports_the_cursor_as_a_vector(self, monkeypatch):
+        monkeypatch.setattr(pyxel, "mouse_x", 120)
+        monkeypatch.setattr(pyxel, "mouse_y", 45)
+
+        assert PyxelPointer().get_position() == Vector2D(120.0, 45.0)
+
+    def test_the_integers_become_floats(self, monkeypatch):
+        # O Pyxel conta o cursor em pixel inteiro. Promover na fronteira
+        # evita que a primeira conta do jogo -- subtrair a posicao do
+        # jogador para achar a direcao da mira -- promova sozinha, num
+        # lugar onde ninguem esta olhando.
+        monkeypatch.setattr(pyxel, "mouse_x", 7)
+        monkeypatch.setattr(pyxel, "mouse_y", 9)
+
+        position = PyxelPointer().get_position()
+
+        assert isinstance(position.x, float)
+        assert isinstance(position.y, float)
+
+    def test_it_reads_the_current_frame_every_time(self, monkeypatch):
+        # Sem estado proprio: o adaptador nao guarda copia, entao nao
+        # ha o que dessincronizar do backend.
+        pointer = PyxelPointer()
+
+        monkeypatch.setattr(pyxel, "mouse_x", 1)
+        monkeypatch.setattr(pyxel, "mouse_y", 2)
+        first = pointer.get_position()
+
+        monkeypatch.setattr(pyxel, "mouse_x", 30)
+        monkeypatch.setattr(pyxel, "mouse_y", 40)
+        second = pointer.get_position()
+
+        assert (first, second) == (Vector2D(1.0, 2.0), Vector2D(30.0, 40.0))
+
+    def test_a_cursor_outside_the_window_is_not_clamped(self, monkeypatch):
+        # O Pyxel devolve negativo quando o cursor sai pela esquerda ou
+        # pelo topo. A porta repassa: prender ao viewport aqui seria o
+        # adaptador decidindo uma regra de jogo, e um jogo que queira
+        # mirar para fora da tela nao teria como desfazer.
+        monkeypatch.setattr(pyxel, "mouse_x", -12)
+        monkeypatch.setattr(pyxel, "mouse_y", 999)
+
+        assert PyxelPointer().get_position() == Vector2D(-12.0, 999.0)
 
 
 class TestPyxelRendererSpriteOrigin:

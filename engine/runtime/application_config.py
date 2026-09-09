@@ -20,3 +20,16 @@ class ApplicationConfig:
     # ficam vazios e draw_sprite desenha nada -- em silencio, que e o
     # pior modo de falhar.
     resource_path: str | None = None
+
+    # O cursor do sistema aparece sobre a janela?
+    #
+    # Mora aqui, e nao na porta `Pointer`, porque sao perguntas
+    # diferentes: a porta responde ONDE o cursor esta, e isso vale com
+    # ele visivel ou nao. Ligar o desenho dele e decisao de JANELA, e
+    # janela e o que o `Application` configura -- mesmo lugar e mesma
+    # forma do `resource_path`.
+    #
+    # Default False porque e o do proprio Pyxel, e porque um jogo so de
+    # teclado nao deve ganhar um cursor por acidente. Quem mira com o
+    # mouse liga -- ou desenha a propria mira e deixa desligado.
+    show_cursor: bool = False

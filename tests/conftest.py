@@ -6,8 +6,10 @@ entao a suite roda headless e sem dependencia grafica.
 
 import pytest
 
+from engine.math.vector2d import Vector2D
 from engine.ports.application import Application
 from engine.ports.input import Input
+from engine.ports.pointer import Pointer
 from engine.ports.renderer import Renderer
 from engine.scene.node import Node
 from engine.scene.scene import Scene
@@ -113,6 +115,29 @@ class SpyInput(Input):
         self.just_released.add(key)
 
 
+class SpyPointer(Pointer):
+    """Cursor roteirizado pelo teste.
+
+    Guarda um Vector2D e devolve a mesma instancia, sem copia: o vetor
+    e imutavel, entao nao ha o que defender -- o teste que guardar a
+    referencia devolvida continua vendo o valor que leu.
+
+    `move_to` existe para que o teste escreva o movimento do cursor com
+    o mesmo vocabulario de frame que o SpyInput usa para as teclas, em
+    vez de reatribuir o campo na mao.
+    """
+
+    def __init__(self, position=None):
+        self.position = position if position is not None else Vector2D()
+
+    def get_position(self):
+        return self.position
+
+    def move_to(self, x, y):
+        """Simula o frame em que o cursor apareceu em outro lugar."""
+        self.position = Vector2D(x, y)
+
+
 class SpyApplication(Application):
     """Backend de mentira que roda um numero fixo de frames.
 
@@ -210,6 +235,11 @@ def spy_input():
     # embutida `input` e seria passada como se fosse a porta. Com
     # `spy_input` o esquecimento vira NameError na hora.
     return SpyInput()
+
+
+@pytest.fixture
+def pointer():
+    return SpyPointer()
 
 
 @pytest.fixture

@@ -18,8 +18,11 @@ class PyxelApplication(Application):
             fps=config.fps,
         )
 
-        # Depois do init: os bancos de imagem so existem com a janela
-        # ja criada.
+        # Os dois DEPOIS do init, e pelo mesmo motivo: nao ha janela
+        # antes dele, e nem banco de imagem nem estado de cursor
+        # existem sem ela.
+        pyxel.mouse(config.show_cursor)
+
         if config.resource_path is not None:
             pyxel.load(config.resource_path)
 

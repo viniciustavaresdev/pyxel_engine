@@ -35,3 +35,14 @@ class Key(Enum):
     ENTER = auto()
     ESCAPE = auto()
     SHIFT = auto()
+
+    # Botoes do mouse, e nao um enum separado: a pergunta que um botao
+    # responde -- baixo, desceu agora, subiu agora -- e exatamente a
+    # que uma tecla ja responde, e a porta `Input` ja a faz. Estando
+    # aqui, `Action.ATIRAR` amarra a {MOUSE_LEFT, Z} e o `ActionMap`
+    # responde pelos dois sem uma linha nova.
+    #
+    # A POSICAO do cursor nao cabe neste vocabulario: e continua e nao
+    # tem analogo em teclado. Ela tem porta propria, `ports/pointer.py`.
+    MOUSE_LEFT = auto()
+    MOUSE_RIGHT = auto()

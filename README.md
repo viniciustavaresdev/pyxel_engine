@@ -20,7 +20,7 @@ venv\Scripts\activate          # Windows
 pip install -e ".[dev]"
 
 python main.py                 # a demo
-pytest                         # 411 testes, sem janela
+pytest                         # 548 testes, sem janela
 ```
 
 Verificação (as três precisam passar limpas):
@@ -225,6 +225,29 @@ O enquadramento é aplicado na raiz, pela `Scene`, e não no `on_render` de algu
 nó: se dependesse da ordem de visita, bastaria alguém reordenar os filhos para
 metade da cena desenhar com o enquadramento errado.
 
+**Tela ↔ mundo mora aqui**, pelo mesmo motivo que o `get_view_offset`: o
+deslocamento é da câmera, e fora dela cada nó que precisasse do cursor refaria a
+subtração da meia tela na mão.
+
+```python
+# a mira
+alvo = scene.camera.screen_to_world(pointer.get_position())
+
+# um marcador de alvo, desenhado na camada de UI
+canto = scene.camera.world_to_screen(inimigo.get_world_position())
+```
+
+As duas são **translação pura**, e isso não é simplificação — é a inversa exata
+do que o enquadramento faz. A porta enquadra com `set_camera(offset)`, um
+deslocamento e nada mais, então girar ou escalar o nó da câmera *não* gira nem
+dá zoom na vista. Uma conversão que aplicasse rotação discordaria do que aparece
+na tela; esta conta a mesma verdade que o desenho, e há teste nos dois sentidos
+fixando isso. O que a rotação do **pai** faz continua valendo: ela move a câmera
+pelo mundo, e é a posição mundial que entra na conta.
+
+Valem para a camada `world`. Na `ui`, tela **é** mundo, e nenhuma das duas deve
+ser chamada.
+
 ### Camadas — `world` e `ui`, e quem decide o espaço
 
 Toda `Scene` nasce com duas subárvores. `world` desenha enquadrada pela câmera;
@@ -292,6 +315,49 @@ frames é mais determinístico do que em segundos. O que fica genuinamente fora 
 câmera lenta fracionária — 0,7x não tem resposta boa num passo fixo, e metade da
 velocidade é atualizar o mundo em frames alternados.
 
+### Cooldown — o contador que sabe responder "já?"
+
+A consequência prática de não haver `dt`: sem relógio, "meio segundo" não é uma
+quantidade que a engine saiba medir, e a unidade que sobra é o frame.
+
+```python
+self.cooldown.tick()
+
+if disparou and self.cooldown.is_ready():
+    self.atirar()
+    self.cooldown.start()
+```
+
+Pequeno de propósito. **Não é um agendador** — não guarda callback, não dispara
+nada sozinho, não sabe o que é uma arma. Quem pergunta é quem age.
+
+Quatro decisões que valem estar escritas, porque são as arestas que decidem o
+feel:
+
+- **Nasce pronto.** Um nó que entra na cena age no primeiro frame. Uma arma que
+  esperasse a própria cadência antes do primeiro tiro seria uma regra de jogo
+  que o contador estaria inventando sozinho; quem quiser isso chama `start()` na
+  construção, e a intenção fica escrita.
+- **Duração zero responde `True` sempre**, inclusive logo depois de um `start()`.
+  É assim que se desliga uma cadência sem um `if` em volta de toda chamada.
+- **`start()` recomeça do cheio, não acumula.** Acumular faria um gatilho
+  segurado empurrar o próximo tiro para sempre — o jogador apertaria mais e
+  atiraria menos.
+- **`duration` é pública e mutável, e vale a partir do próximo `start()`.** É a
+  principal alavanca de dificuldade do jogo, então ajustar tem de ser uma
+  atribuição. Esticar a contagem em curso faria o efeito de um ajuste depender do
+  frame em que ele caiu.
+
+`tick()` para no zero em vez de descer para sempre. A diferença não aparece em
+`is_ready()` — e é por isso que `remaining` existe: sem ele, um contador que
+devolvesse −4000 depois de um minuto parado seria indistinguível de um correto,
+até alguém desenhar uma barra de HUD com ele.
+
+Um `tick()` é **um frame**, e disso ele não tem como se defender: chamado duas
+vezes no mesmo frame, a cadência dobra. É a mesma contrapartida do `update` sem
+`dt` — quem conta os frames é o laço. O ganho colateral de o `tick()` morar no
+`on_update` é que pausar o mundo congela a cadência junto, sem uma linha a mais.
+
 ### Input — três perguntas, não uma
 
 `is_pressed` (segurar para andar), `is_just_pressed` (o instante do pulo) e
@@ -301,6 +367,43 @@ pulo disparar em todo frame com a tecla baixa.
 O enum `Key` é próprio, e existe um teste que falha se uma tecla nova não for
 mapeada no adaptador — transformando um `KeyError` em pleno jogo numa falha de
 build.
+
+### Pointer — a posição, que não é uma tecla
+
+Mirar com o mouse trouxe duas coisas ao mesmo tempo, e elas foram para lados
+opostos da fronteira de propósito.
+
+**A posição ganhou porta própria.** `Pointer.get_position()` devolve um
+`Vector2D` em coordenadas de **tela**. Não entrou no `Input` porque a pergunta é
+de outra natureza: uma tecla responde três perguntas discretas e não tem análogo
+contínuo; um cursor responde uma, e ela é uma posição. Juntá-las daria uma porta
+com dois vocabulários e obrigaria todo dublê de teclado a inventar uma posição
+que o teste dele não usa.
+
+**Os botões entraram no `Key`.** `Key.MOUSE_LEFT` e `Key.MOUSE_RIGHT` são teclas
+como qualquer outra, porque respondem exatamente às mesmas três perguntas. O
+ganho é o `ActionMap` continuar valendo **sem uma linha nova**:
+
+```python
+actions.bind(Action.ATIRAR, {Key.MOUSE_LEFT, Key.Z})
+```
+
+Um `MouseButton` separado obrigaria o mapa a ser genérico em duas dimensões para
+não comprar nada. E o teste de completude do adaptador — o que falha quando uma
+tecla nova não é mapeada — passou a cobrir os botões de graça.
+
+Tela, e não mundo, é contrato: o adaptador não conhece câmera nenhuma. Quem sabe
+converter é a `Camera`. O adaptador também **não prende o cursor ao viewport** —
+o Pyxel devolve negativo quando ele sai pela esquerda, e recortar ali seria o
+adaptador decidindo uma regra de jogo que o jogo não teria como desfazer.
+
+**Ver o cursor é outra pergunta**, e ela mora em `ApplicationConfig.show_cursor`.
+A porta responde *onde* o cursor está, e isso vale com ele visível ou não;
+desenhá-lo é decisão de **janela**, e janela é o que o `Application` configura —
+mesmo lugar e mesma forma do `resource_path`, aplicado depois do `init` pelo
+mesmo motivo (não há estado de cursor antes de haver janela). O default é
+`False`, que é o do próprio Pyxel: um jogo só de teclado não deve ganhar um
+cursor por acidente, e quem desenha a própria mira deixa desligado.
 
 ### ActionMap — de teclas para intenções
 
@@ -377,11 +480,11 @@ engine/
 ├── scene/           a árvore e quem vive nela
 │   └── node.py  visual_node.py  scene.py  scene_manager.py  camera.py
 ├── runtime/         o laço de frame e a composição do jogo
-│   └── engine.py  game.py  application_config.py
+│   └── engine.py  game.py  application_config.py  cooldown.py
 ├── input/           vocabulário de entrada
 │   └── key.py  action_map.py
 ├── ports/           o que a engine exige do mundo
-│   └── renderer.py  input.py  application.py
+│   └── renderer.py  input.py  pointer.py  application.py
 └── adapters/        quem cumpre a exigência
     └── pyxel/       pyxel_renderer.py  pyxel_input.py  ...
 ```
@@ -403,7 +506,7 @@ sobrou uma pasta com nada dentro, e uma pasta vazia não organiza coisa alguma.
 
 ### A superfície pública
 
-`engine/__init__.py` reexporta os 17 nomes que um jogo realmente usa. O que está
+`engine/__init__.py` reexporta os 19 nomes que um jogo realmente usa. O que está
 lá é contrato; o resto é detalhe interno, livre para mudar de módulo sem aviso.
 
 ```python
@@ -439,6 +542,20 @@ estão fechados, as duas decisões de baixo nível foram tomadas, a engine cabe 
 orçamento de frame e o projeto está sob controle de versão. **Os onze passos da
 sequência estão feitos** — os três últimos (mapa de ações, camadas de render e a
 aposentadoria do `dt`) são os que se sentem escrevendo jogo em vez de engine.
+
+**A semana 1 do `PLANEJAMENTO.md` está fechada.** Entraram a porta `Pointer`, os
+botões de mouse dentro do `Key`, `Camera.screen_to_world` / `world_to_screen`, o
+`Cooldown` em frames e o `show_cursor` no `ApplicationConfig`. A demo passou a
+apontar para o cursor, e o satélite — que mora em `(10, 0)` local, sobre o eixo
+`+X` do jogador — virou o indicador visível da mira sem uma linha de código para
+isso. É a primeira vez que uma peça nova nasceu de um jogo pedindo, e não de uma
+lista de engine.
+
+Um efeito colateral que vale registrar: **o `main.py` passou a passar no
+`mypy --strict`**. O achado que esta seção anotava (`Hud.__init__` sem anotação
+de retorno) saiu na reescrita da demo. Ele continua fora do `files` do pyproject,
+porque o `PLANEJAMENTO.md` adiou isso de propósito — mas o custo de incluí-lo
+caiu para uma linha.
 
 **Três bugs abertos entraram na lista depois disso**, e não são de natureza nova:
 são os mesmos dois modos de falha que os passos 3 e 4 fecharam — enquadramento

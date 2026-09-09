@@ -22,6 +22,12 @@ _PYXEL_KEYS: dict[Key, int] = {
     Key.ENTER: pyxel.KEY_RETURN,
     Key.ESCAPE: pyxel.KEY_ESCAPE,
     Key.SHIFT: pyxel.KEY_SHIFT,
+    # Botoes do mouse no MESMO mapa que as teclas, e nao num segundo
+    # dicionario: o btn/btnp/btnr do Pyxel os aceita pelo mesmo
+    # caminho, entao um mapa separado seria uma divisao que nem o
+    # backend nem a engine fazem.
+    Key.MOUSE_LEFT: pyxel.MOUSE_BUTTON_LEFT,
+    Key.MOUSE_RIGHT: pyxel.MOUSE_BUTTON_RIGHT,
 }
 
 

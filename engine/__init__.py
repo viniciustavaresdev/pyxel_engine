@@ -26,8 +26,10 @@ from engine.math.transform import Transform
 from engine.math.vector2d import Vector2D
 from engine.ports.application import Application
 from engine.ports.input import Input
+from engine.ports.pointer import Pointer
 from engine.ports.renderer import Renderer
 from engine.runtime.application_config import ApplicationConfig
+from engine.runtime.cooldown import Cooldown
 from engine.runtime.engine import Engine
 from engine.runtime.game import Game
 from engine.scene.camera import Camera
@@ -50,6 +52,7 @@ __all__ = [
     "VisualNode",
     # runtime -- o laco de frame
     "ApplicationConfig",
+    "Cooldown",
     "Engine",
     "Game",
     # input
@@ -58,5 +61,6 @@ __all__ = [
     # ports -- para quem escreve um adaptador ou um duble de teste
     "Application",
     "Input",
+    "Pointer",
     "Renderer",
 ]
