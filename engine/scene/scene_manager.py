@@ -6,7 +6,6 @@ from engine.scene.scene import Scene
 
 
 class SceneManager:
-
     def __init__(self) -> None:
         self._current_scene: Scene | None = None
 

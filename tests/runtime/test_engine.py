@@ -25,7 +25,6 @@ def build_engine(log, renderer, clear_color=0, input=None):
 
 
 class TestRunningState:
-
     def test_starts_stopped(self, log, renderer):
         engine = build_engine(log, renderer)
 
@@ -48,7 +47,6 @@ class TestRunningState:
 
 
 class TestUpdate:
-
     def test_drives_the_scene(self, log, renderer):
         engine = build_engine(log, renderer)
         engine.start()
@@ -92,7 +90,6 @@ class TestUpdate:
 
 
 class TestRender:
-
     def test_clears_before_drawing_the_scene(self, log, renderer):
         # A ordem importa: limpar depois apagaria o frame inteiro.
         engine = build_engine(log, renderer)
@@ -123,7 +120,6 @@ class TestRender:
 
 
 class TestWithoutScene:
-
     def test_runs_headless_against_an_empty_scene_manager(self, renderer):
         # Regressao do bug do main.py: sem cena registrada o loop tem
         # de seguir girando e apenas limpar a tela, nao explodir.

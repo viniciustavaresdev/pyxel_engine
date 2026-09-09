@@ -27,9 +27,15 @@ Verificação (as três precisam passar limpas):
 
 ```bash
 ruff check .                   # lint + ordem de imports
-black --check .                # formatação
+ruff format --check .          # formatação
 mypy                           # --strict em engine/ e tests/
 ```
+
+São duas ferramentas, e não três: o `ruff format` é uma reimplementação do
+black, então manter os dois era pagar dois configs de `line-length` pelo mesmo
+resultado. O `E501` saiu do `select` pelo mesmo motivo — largura de linha é
+assunto do formatador, e um lint que reclama do que a outra ferramenta já
+arruma só ensina a ignorar avisos.
 
 ---
 
@@ -151,7 +157,7 @@ desenho — e isso é o `Anchor`, um valor normalizado (`0..1`) que vive em
 ```python
 class Player(VisualNode):
     def __init__(self):
-        super().__init__(size=Vector2D(8.0, 8.0))   # Anchor.CENTER é o default
+        super().__init__(size=Vector2D(8.0, 8.0))  # Anchor.CENTER é o default
 ```
 
 Com `Anchor.CENTER`, três coisas passam a valer ao mesmo tempo e de graça: o nó
@@ -226,7 +232,7 @@ Toda `Scene` nasce com duas subárvores. `world` desenha enquadrada pela câmera
 
 ```python
 self.world.add_child(player)
-self.ui.add_child(Hud("Hud", player))     # a ordem aqui não importa
+self.ui.add_child(Hud("Hud", player))  # a ordem aqui não importa
 ```
 
 O que isso substituiu: um HUD que chamava `reset_camera()` dentro do próprio
@@ -253,8 +259,8 @@ UI é a única exceção, e ela é declarada. O que `world` acrescenta é poder 
 o mundo como uma coisa só — e é aí que um menu de pausa vira uma linha:
 
 ```python
-scene.world.active = False      # o mundo congela; a UI segue viva
-scene.world.visible = False     # o mundo some; o menu fica
+scene.world.active = False  # o mundo congela; a UI segue viva
+scene.world.visible = False  # o mundo some; o menu fica
 ```
 
 São os dois portões do `Node` (`active` e `visible`) aplicados a uma camada
@@ -265,7 +271,7 @@ inteira. `z_index` dentro de uma camada continua fora, até um jogo pedir.
 `update()` não recebe tempo. Um update é **um frame**, e velocidade é por frame:
 
 ```python
-PLAYER_SPEED = 1.2      # px por frame; a 60 fps, 72 px/s
+PLAYER_SPEED = 1.2  # px por frame; a 60 fps, 72 px/s
 ```
 
 Quem é dono do laço é a porta `Application` — `pyxel.run` já se compromete com uma
@@ -411,8 +417,8 @@ a suíte numa máquina sem o Pyxel instalado. Deixando-os fora, a fronteira apar
 na própria forma de importar:
 
 ```python
-from engine import Node, Vector2D                                  # núcleo
-from engine.adapters.pyxel.pyxel_renderer import PyxelRenderer     # backend
+from engine import Node, Vector2D  # núcleo
+from engine.adapters.pyxel.pyxel_renderer import PyxelRenderer  # backend
 ```
 
 A linha mais longa é a que amarra o jogo a um backend. É bom que doa um pouco.
@@ -428,18 +434,86 @@ verdade por nunca ninguém carregá-lo. A checagem roda em subprocesso, porque
 
 ## Estado atual e próximos passos
 
-A separação núcleo/backend está sólida, os dois bugs de ciclo de vida estão
-fechados, as duas decisões de baixo nível foram tomadas, a engine cabe no
+A separação núcleo/backend está sólida, os dois primeiros bugs de ciclo de vida
+estão fechados, as duas decisões de baixo nível foram tomadas, a engine cabe no
 orçamento de frame e o projeto está sob controle de versão. **Os onze passos da
 sequência estão feitos** — os três últimos (mapa de ações, camadas de render e a
 aposentadoria do `dt`) são os que se sentem escrevendo jogo em vez de engine.
 
-O que resta não é sequência, é lista de espera: resposta a colisão, `z_index`,
-`find_child`, o tamanho de tela que vive em dois lugares, e o acabamento. Cada um
-entra quando um jogo pedir — e um jogo é o que falta para saber qual pede
-primeiro.
+**Três bugs abertos entraram na lista depois disso**, e não são de natureza nova:
+são os mesmos dois modos de falha que os passos 3 e 4 fecharam — enquadramento
+que vaza e pedido de remoção que não é coletado — reaparecendo em arranjos que
+os testes daqueles passos não visitam. Estão logo abaixo, em *Bugs confirmados*.
+
+O que resta além deles não é sequência, é lista de espera: resposta a colisão,
+`z_index`, `find_child`, o tamanho de tela que vive em dois lugares, e o
+acabamento. Cada um entra quando um jogo pedir — e um jogo é o que falta para
+saber qual pede primeiro.
 
 ### Bugs confirmados
+
+Os três primeiros estão **abertos**. Os dois seguintes, riscados, estão fechados
+e ficam registrados porque os abertos são recaída deles.
+
+**Uma cena aninhada quebra o enquadramento da cena de fora.** `Scene.render`
+escreve no estado de câmera do renderer e nunca o restaura. Uma `Scene` pendurada
+dentro de outra é um `Node` como qualquer outro: quando a travessia chega nela,
+ela roda o próprio `render`, e se não tiver câmera própria chama `reset_camera()`.
+Tudo que a cena de fora desenhar **depois** dela sai em coordenadas de tela:
+
+```
+outer (com câmera) → SET_CAM(220,240)
+  inner (sem câmera) → RESET_CAM
+  irmão posterior     → rect@-4,-4     ← deveria estar enquadrado
+```
+
+É exatamente a classe de falha que as camadas vieram eliminar — *"se dependesse
+da ordem de visita, bastaria alguém reordenar os filhos para metade da cena
+desenhar com o enquadramento errado"* —, só que reposicionada um nível acima: não
+depende mais da ordem *dentro* de uma cena, e passou a depender de onde uma
+sub-cena cai na lista. E é falha silenciosa: nada levanta, o cenário só aparece
+no lugar errado.
+
+O teste que existe (`tests/scene/test_camera.py:248`) monta o arranjo aninhado
+mas renderiza a `inner` direto, então nunca vê a interação. O que falta é a cena
+de fora renderizar a de dentro e um irmão posterior conferir que continua
+enquadrado.
+
+Junto com este, e na mesma função: **`Scene.render` aplica `set_camera` /
+`reset_camera` antes de checar `self.visible`.** Uma cena invisível não desenha
+nada e mesmo assim deixa o offset dela pendurado no renderer. É a mesma causa —
+estado global escrito sem dono responsável por devolvê-lo — e provavelmente sai
+na mesma correção.
+
+**`queue_free()` num nó sem pai envenena o nó.** A docstring diz que é um no-op —
+*"num nó solto, sem pai, é um no-op: não há de quem se remover"* — mas não é: o
+nó é a própria raiz, então ele registra o pedido em si mesmo e `_flush_pending_removals`
+o descarta sem nunca limpar a marca. Duas consequências, ambas verificadas:
+
+- `is_queued_for_removal` passa a responder `True` para sempre. É uma property
+  **pública**, e existe justamente para o código de jogo não mirar em alvo que já
+  pediu para morrer — um nó saudável que responde "estou morrendo" é pior do que
+  não ter a property.
+- Anexado depois a uma árvore viva, o nó é arrancado no primeiro frame. O
+  `add_child` migra a fila do filho para a raiz nova (a aresta *subárvore montada
+  solta*, do passo 3), e a marca presa faz o pedido antigo ser honrado numa
+  árvore que nunca pediu nada.
+
+O segundo caso é a aresta **readoção antes da coleta** falhando pelo lado que ela
+não cobre: a guarda dela é o `_queued_for_removal` que o `remove_child` zera — e
+um nó que nunca teve pai jamais passa por `remove_child`.
+
+**`scene.active = False` reintroduz o bug da fila.** O flush está atrás do
+`if not self.active: return`, no topo de `Node.update()`. Mover a fila *por pai*
+para a raiz resolveu o caso de um ramo desativado, mas o esvaziamento continua
+condicionado ao `active` da **própria raiz** — então desativar a cena inteira
+recria o sintoma original, com o nó marcado permanecendo na árvore e continuando
+a ser desenhado, porque `render` não olha `active`.
+
+O idioma de pausa que a seção *Camadas* documenta (`scene.world.active = False`)
+não passa por isso: ali a raiz é a cena, que segue atualizando e esvaziando. Mas
+`scene.active = False` é igualmente natural para quem quer pausar tudo, e o
+README não diz em lugar nenhum que uma das duas formas é a certa.
 
 **~~`queue_free()` numa subárvore inativa nunca é coletado.~~ Corrigido.** A fila
 era *por pai* e só esvaziava dentro de `Node.update()`, que retorna cedo quando
@@ -690,7 +764,20 @@ Dois detalhes que a primeira execução revelou e que valia registrar:
   versão mais nova que conhece e passa a formatar para uma sintaxe que o
   interpretador local não sabe ler — a checagem de equivalência dele falha antes
   de comparar coisa alguma. Fixado em `py311`, alinhado com o `requires-python` e
-  com o ruff.
+  com o ruff. O bloco não existe mais — o black saiu quando o `ruff format`
+  passou a fazer o mesmo trabalho —, mas o cuidado migrou junto: é o
+  `target-version` do `[tool.ruff]` que sustenta a mesma garantia agora.
+
+**O `main.py` está fora do mypy.** O `files = ["engine", "tests"]` do pyproject
+não o inclui; o `ruff` pega (lint e formatação rodam sobre `.`), o checador de
+tipos não. E ele é a única peça de código **de jogo** no repositório — justamente a que
+provaria que a superfície pública aguenta ser consumida sob `--strict`, que é uma
+pergunta diferente da que `engine/` responde ao passar limpo. Hoje há pelo menos
+um achado esperando: `Hud.__init__` não tem anotação de retorno.
+
+O conserto é uma linha em `files` e o que o `--strict` cobrar depois. Vale notar
+que ele não é gratuito: a demo passaria a ser mantida sob o mesmo rigor da
+engine, e é isso que se quer de um exemplo que faz as vezes de documentação.
 
 **Acabamento.** O `main.py` faz papel de exemplo na raiz enquanto `games/` está
 vazia — mover para `games/demo/` deixaria a raiz só com o que é distribuível.

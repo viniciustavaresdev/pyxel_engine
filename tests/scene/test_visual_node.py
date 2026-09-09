@@ -35,7 +35,6 @@ class CountingNode(VisualNode):
 
 
 class TestDefaults:
-
     def test_defaults_to_the_center_anchor(self):
         # O default que faz a rotacao girar em torno do centro sem que
         # o jogo precise dizer nada.
@@ -57,7 +56,6 @@ class TestDefaults:
 
 
 class TestCenteredAnchor:
-
     def test_the_origin_is_the_center(self):
         node = VisualNode(size=Vector2D(8.0, 8.0))
         node.transform.position = Vector2D(100.0, 50.0)
@@ -82,7 +80,6 @@ class TestCenteredAnchor:
 
 
 class TestOtherAnchors:
-
     def test_top_left_anchor_draws_from_the_origin(self):
         # A convencao antiga, agora explicita em vez de acidental.
         node = VisualNode(size=Vector2D(8.0, 8.0), anchor=Anchor.TOP_LEFT)
@@ -124,7 +121,6 @@ class TestOtherAnchors:
 
 
 class TestScale:
-
     def test_the_size_follows_the_scale(self):
         node = VisualNode(size=Vector2D(8.0, 8.0))
         node.transform.scale = Vector2D(2.0, 3.0)
@@ -156,7 +152,6 @@ class TestScale:
 
 
 class TestHierarchy:
-
     def test_a_child_orbits_the_center_of_the_parent(self):
         # O sintoma que motivou o anchor: com a origem no canto, o
         # satelite orbitava o canto superior esquerdo do jogador.
@@ -207,7 +202,6 @@ class TestHierarchy:
 
 
 class TestWorldBounds:
-
     def test_the_bounds_are_the_corner_and_the_size(self):
         node = VisualNode(size=Vector2D(8.0, 8.0))
         node.transform.position = Vector2D(100.0, 50.0)
@@ -350,7 +344,6 @@ class TestChainClimbs:
 
 
 class TestRotationWithAnOffCenterAnchor:
-
     def test_the_box_swings_around_the_origin(self):
         # Com o anchor nos pes, girar o no faz o corpo balancar em
         # torno dos pes -- que e exatamente o que se quer de um

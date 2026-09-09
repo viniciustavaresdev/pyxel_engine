@@ -6,7 +6,6 @@ from tests.conftest import SpyNode
 
 
 class TestCameraIsANode:
-
     def test_inherits_from_node(self):
         assert isinstance(Camera("Cam"), Node)
 
@@ -20,7 +19,6 @@ class TestCameraIsANode:
 
 
 class TestViewOffset:
-
     def test_without_viewport_the_offset_is_the_position(self):
         # Viewport zerado: a semantica vira "canto superior esquerdo",
         # util para camera presa a uma grade de tiles.
@@ -65,7 +63,6 @@ class TestViewOffset:
 
 
 class TestSceneCamera:
-
     def test_a_scene_without_a_camera_draws_in_screen_space(
         self, log, renderer
     ):

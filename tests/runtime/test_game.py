@@ -36,7 +36,6 @@ def build_game(log, renderer, frames=1, scene=None, input=None):
 
 
 class TestStartupSequence:
-
     def test_initializes_the_backend_with_the_config(self, log, renderer):
         game, application, _ = build_game(log, renderer)
 
@@ -64,7 +63,6 @@ class TestStartupSequence:
 
 
 class TestInitialScene:
-
     def test_loads_the_initial_scene(self, log, renderer):
         manager = SceneManager()
         engine = Engine(
@@ -138,7 +136,6 @@ class TestInitialScene:
 
 
 class TestFrameLoop:
-
     def test_drives_update_and_render_every_frame(self, log, renderer):
         game, _, _ = build_game(log, renderer, frames=3)
 
@@ -162,7 +159,6 @@ class TestFrameLoop:
 
 
 class TestQuit:
-
     def test_does_not_quit_while_the_engine_runs(self, log, renderer):
         game, application, _ = build_game(log, renderer, frames=3)
 

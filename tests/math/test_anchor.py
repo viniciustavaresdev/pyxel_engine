@@ -7,7 +7,6 @@ from engine.math.vector2d import Vector2D
 
 
 class TestConstants:
-
     def test_center_is_the_middle_of_the_box(self):
         assert (Anchor.CENTER.x, Anchor.CENTER.y) == (0.5, 0.5)
 
@@ -19,7 +18,6 @@ class TestConstants:
 
 
 class TestImmutability:
-
     def test_an_anchor_cannot_be_written_to(self):
         # frozen porque as constantes sao compartilhadas: sem isso, um
         # no que escrevesse em Anchor.CENTER moveria todos os outros.

@@ -7,7 +7,6 @@ from engine.runtime.application_config import ApplicationConfig
 
 
 class PyxelApplication(Application):
-
     def initialize(
         self,
         config: ApplicationConfig,

@@ -8,7 +8,6 @@ from engine.math.vector2d import Vector2D
 
 
 class TestConstruction:
-
     def test_default_is_origin(self):
         assert Vector2D() == Vector2D(0.0, 0.0)
 
@@ -19,7 +18,6 @@ class TestConstruction:
 
 
 class TestArithmetic:
-
     def test_add(self):
         assert Vector2D(4.0, 5.0) + Vector2D(-1.0, 7.0) == Vector2D(3.0, 12.0)
 
@@ -60,7 +58,6 @@ class TestArithmetic:
 
 
 class TestMagnitude:
-
     def test_magnitude(self):
         assert Vector2D(3.0, 4.0).magnitude() == 5.0
 
@@ -82,7 +79,6 @@ class TestMagnitude:
 
 
 class TestRotated:
-
     def test_rotating_by_zero_changes_nothing(self):
         assert Vector2D(3.0, 4.0).rotated(0.0) == Vector2D(3.0, 4.0)
 
@@ -127,7 +123,6 @@ class TestRotated:
 
 
 class TestScaled:
-
     def test_multiplies_component_by_component(self):
         result = Vector2D(3.0, 4.0).scaled(Vector2D(2.0, 10.0))
 
@@ -159,7 +154,6 @@ class TestScaled:
 
 
 class TestProducts:
-
     def test_dot(self):
         assert Vector2D(1.0, 2.0).dot(Vector2D(3.0, 4.0)) == 11.0
 
@@ -225,7 +219,6 @@ class TestImmutability:
 
 
 class TestFloatEquality:
-
     def test_equality_is_exact_and_bites_on_accumulation(self):
         # Documenta uma armadilha real, nao um bug do Vector2D: o
         # __eq__ gerado pelo dataclass compara float por igualdade

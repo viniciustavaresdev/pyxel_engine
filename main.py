@@ -108,6 +108,7 @@ class Player(VisualNode):
         # Os limites recuam meia caixa de cada lado: com a origem no
         # centro, prender a posicao em [0, mundo] deixaria metade do
         # jogador para fora da borda.
+
         half = PLAYER_SIZE / 2.0
 
         self.transform.position = Vector2D(
@@ -136,9 +137,9 @@ class Satellite(VisualNode):
     # origem do pai -- que agora e o centro dele.
 
     def __init__(self, name: str | None = None) -> None:
-        super().__init__(name, size=Vector2D(3.0, 3.0))
+        super().__init__(name, size=Vector2D(4.0, 4.0))
 
-        self.transform.position = Vector2D(PLAYER_SIZE / 2, 0)
+        self.transform.position = Vector2D(10.0, 0.0)
         self.color = 8
 
     def on_update(self, input: Input) -> None:
@@ -203,7 +204,6 @@ class Hud(Node):
 
 
 class DemoScene(Scene):
-
     def __init__(self, name: str | None = None) -> None:
         super().__init__(name)
 

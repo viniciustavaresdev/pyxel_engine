@@ -35,7 +35,6 @@ def movement_map():
 
 
 class TestBindings:
-
     def test_the_constructor_accepts_any_iterable_of_keys(self):
         actions = ActionMap(
             {
@@ -129,7 +128,6 @@ class TestAnUnboundActionRaises:
 
 
 class TestIsPressed:
-
     def test_any_bound_key_activates_the_action(self):
         actions = movement_map()
 
@@ -254,7 +252,6 @@ class TestIsJustReleased:
 
 
 class TestGetAxis:
-
     def test_positive_action_gives_one(self):
         actions = movement_map()
         input = SpyInput()
@@ -308,7 +305,6 @@ class TestGetAxis:
 
 
 class TestGetVector:
-
     def _vector(self, actions, input):
         return actions.get_vector(
             Action.MOVE_LEFT,

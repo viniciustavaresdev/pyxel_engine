@@ -14,7 +14,6 @@ from tests.conftest import SpyRenderer
 
 
 class TestVectorSignatures:
-
     def test_draw_rect_takes_position_and_size(self, renderer):
         renderer.draw_rect(Vector2D(10.0, 20.0), Vector2D(4.0, 8.0), 11)
 
@@ -73,7 +72,6 @@ class TestVectorSignatures:
 
 
 class TestTheSpyRecordsEachCallSeparately:
-
     def test_reusing_a_vector_across_calls_is_safe(self):
         # Este teste ja existiu por outro motivo: enquanto Vector2D era
         # mutavel, um no que reaproveitasse o proprio vetor de posicao
@@ -96,7 +94,6 @@ class TestTheSpyRecordsEachCallSeparately:
 
 
 class TestWorldPositionFlowsStraightIntoTheRenderer:
-
     def test_a_node_draws_without_unpacking_coordinates(self, renderer):
         # O ganho da mudanca: nenhum `.x, .y` no codigo de jogo.
         class Blob(Node):
@@ -117,7 +114,6 @@ class TestWorldPositionFlowsStraightIntoTheRenderer:
 
 
 class TestPortContract:
-
     def test_spy_renderer_satisfies_the_port(self):
         assert isinstance(SpyRenderer(), Renderer)
 

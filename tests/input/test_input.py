@@ -5,7 +5,6 @@ from tests.conftest import SpyInput
 
 
 class TestKey:
-
     def test_values_are_distinct(self):
         assert len(set(Key)) == len(list(Key))
 
@@ -62,7 +61,6 @@ class TestSpyInputStates:
 
 
 class TestInputReachesTheGraph:
-
     def test_the_same_input_reaches_the_leaves(self, spy_input):
         seen = []
 
@@ -138,7 +136,6 @@ class TestInputReachesTheGraph:
 
 
 class TestPortContract:
-
     def test_spy_input_satisfies_the_port(self):
         assert isinstance(SpyInput(), Input)
 

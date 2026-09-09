@@ -7,7 +7,6 @@ from engine.math.vector2d import Vector2D
 
 
 class TestConstruction:
-
     def test_holds_the_four_components(self):
         rect = Rect(1.0, 2.0, 3.0, 4.0)
 
@@ -31,7 +30,6 @@ class TestConstruction:
 
 
 class TestImmutability:
-
     def test_cannot_be_written_to(self):
         # frozen porque a regiao de um sprite e definida uma vez e
         # compartilhada por todo frame que a desenha. Sem isto, uma
@@ -48,7 +46,6 @@ class TestImmutability:
 
 
 class TestDerivedVectors:
-
     def test_position_is_the_top_left(self):
         assert Rect(1.0, 2.0, 3.0, 4.0).position == Vector2D(1.0, 2.0)
 
@@ -74,7 +71,6 @@ class TestDerivedVectors:
 
 
 class TestCenter:
-
     def test_center_is_half_a_size_past_the_corner(self):
         assert Rect(10.0, 20.0, 8.0, 4.0).center == Vector2D(14.0, 22.0)
 
@@ -83,7 +79,6 @@ class TestCenter:
 
 
 class TestFromCenterSize:
-
     def test_builds_the_corner_from_the_center(self):
         rect = Rect.from_center_size(Vector2D(14.0, 22.0), Vector2D(8.0, 4.0))
 
@@ -104,7 +99,6 @@ class TestFromCenterSize:
 
 
 class TestContains:
-
     def test_a_point_inside_is_inside(self):
         assert Rect(0.0, 0.0, 10.0, 10.0).contains(Vector2D(5.0, 5.0))
 
@@ -143,7 +137,6 @@ class TestContains:
 
 
 class TestIntersects:
-
     def test_overlapping_boxes_intersect(self):
         assert Rect(0.0, 0.0, 10.0, 10.0).intersects(
             Rect(5.0, 5.0, 10.0, 10.0)
@@ -205,7 +198,6 @@ class TestIntersects:
 
 
 class TestNegativeSize:
-
     def test_accepts_a_negative_width(self):
         # Largura negativa e o idioma de espelhamento do backend --
         # virar um personagem sem uma segunda arte. Nao e erro.

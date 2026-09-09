@@ -7,7 +7,6 @@ from engine.math.vector2d import Vector2D
 
 
 class TestDefaults:
-
     def test_starts_at_origin(self):
         assert Transform().position == Vector2D(0.0, 0.0)
 
@@ -59,7 +58,6 @@ class TestSharedDefaultsAreSafe:
 
 
 class TestExplicitConstruction:
-
     def test_accepts_positional_arguments(self):
         transform = Transform(
             Vector2D(0.0, 0.7),
@@ -82,7 +80,6 @@ class TestExplicitConstruction:
 
 
 class TestCopy:
-
     def test_copy_is_equal(self):
         original = Transform(Vector2D(1.0, 2.0), 0.5, Vector2D(3.0, 4.0))
 

@@ -22,7 +22,6 @@ from engine.ports.renderer import Renderer
 
 
 class TestKeyMapCompleteness:
-
     def test_every_key_has_a_pyxel_constant(self):
         # O teste que paga o preco do enum proprio: acrescentar uma Key
         # e esquecer do mapa daria KeyError no meio do jogo, no frame

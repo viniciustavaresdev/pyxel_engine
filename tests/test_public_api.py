@@ -12,7 +12,6 @@ import engine
 
 
 class TestTheDeclaredSurface:
-
     def test_every_announced_name_exists(self):
         # Um nome no __all__ que nao resolve so apareceria no import de
         # quem usa a engine -- e com uma mensagem que nao aponta para

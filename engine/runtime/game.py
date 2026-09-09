@@ -5,7 +5,6 @@ from engine.scene.scene import Scene
 
 
 class Game:
-
     def __init__(
         self,
         application: Application,

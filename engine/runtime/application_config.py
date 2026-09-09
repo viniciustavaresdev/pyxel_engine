@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class ApplicationConfig:
-
     width: int
     height: int
     title: str

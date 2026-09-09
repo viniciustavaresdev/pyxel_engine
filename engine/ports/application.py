@@ -5,7 +5,6 @@ from engine.runtime.application_config import ApplicationConfig
 
 
 class Application(ABC):
-
     @abstractmethod
     def initialize(
         self,

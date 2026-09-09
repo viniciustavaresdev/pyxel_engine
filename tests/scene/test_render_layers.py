@@ -92,7 +92,6 @@ class TestTheLayersAreOrdinaryNodes:
 
 
 class TestDrawOrder:
-
     def test_the_ui_layer_draws_after_the_world(self, log, renderer):
         scene = Scene("Level1")
         scene.ui.add_child(SpyNode("InUi", log))
@@ -133,7 +132,6 @@ class TestDrawOrder:
 
 
 class TestTheSpaceOfEachPass:
-
     def test_the_world_is_framed_and_the_ui_is_not(self, renderer):
         scene = Scene("Level1")
         camera = Camera("Cam")

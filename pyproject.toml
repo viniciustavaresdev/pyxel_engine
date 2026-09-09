@@ -21,11 +21,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Duas ferramentas, nao tres: o ruff formata (`ruff format`) alem de
+# lintar, e o formatador dele e uma reimplementacao do black. Manter os
+# dois significava dois configs de line-length para o mesmo resultado.
 dev = [
     "pytest>=8.0",
     "mypy>=1.11",
     "ruff>=0.6",
-    "black>=24.0",
 ]
 
 # `engine*` cobre engine/ e todos os subpacotes. `tests` fica de fora
@@ -45,21 +47,22 @@ pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-q"
 
-[tool.black]
-line-length = 79
-
-# Alinhado com requires-python e com o target-version do ruff. Sem isto
-# o black infere a versao mais nova que conhece e passa a formatar para
-# uma sintaxe que o interpretador local nem sabe ler -- a checagem de
-# equivalencia dele falha antes de comparar qualquer coisa.
-target-version = ["py311"]
-
+# `target-version` alinhado com requires-python: sem isto o formatador
+# infere a versao mais nova que conhece e passa a escrever uma sintaxe
+# que o interpretador local nem sabe ler.
 [tool.ruff]
 line-length = 79
 target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+# E501 (linha longa) sai porque quem governa largura aqui e o
+# `ruff format`. Mantido, ele avisaria sobre o que o formatador ja
+# arrumou -- ou, pior, sobre o que ele NAO quebra (uma string longa
+# demais) e passaria a reclamar para sempre de algo sem conserto
+# automatico. O limite continua valendo: e o `line-length` acima.
+ignore = ["E501"]
 
 # Checagem de tipos. Estrito em engine/: uma engine que se apresenta
 # como tipada tem de aguentar --strict.

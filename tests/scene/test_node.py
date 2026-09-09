@@ -37,7 +37,6 @@ class CountingNode(Node):
 
 
 class TestAddChild:
-
     def test_sets_parent_and_appends(self):
         parent = Node("Parent")
         child = Node("Child")
@@ -92,7 +91,6 @@ class TestAddChild:
 
 
 class TestRemoveChild:
-
     def test_detaches_child(self):
         parent = Node("Parent")
         child = Node("Child")
@@ -116,7 +114,6 @@ class TestRemoveChild:
 
 
 class TestIsAncestorOf:
-
     def test_true_for_direct_parent(self):
         parent = Node("Parent")
         child = Node("Child")
@@ -170,7 +167,6 @@ def build_tree(log):
 
 
 class TestTraversalOrder:
-
     def test_update_is_pre_order(self, log, spy_input):
         # O pai atualiza ANTES dos filhos: um filho que le o estado do
         # pai no mesmo frame ve o valor ja atualizado.
@@ -234,7 +230,6 @@ class TestTraversalOrder:
 
 
 class TestRenderPropagation:
-
     def test_the_same_renderer_reaches_the_leaves(self, renderer):
         class Drawer(Node):
             def on_render(self, renderer):
@@ -249,7 +244,6 @@ class TestRenderPropagation:
 
 
 class TestWorldPosition:
-
     def test_root_returns_its_own_position(self):
         node = Node("Node")
         node.transform.position = Vector2D(10.0, 20.0)
@@ -304,7 +298,6 @@ class TestWorldPosition:
 
 
 class TestWorldTransformComposition:
-
     def test_parent_scale_stretches_the_child_offset(self):
         parent = Node("Parent")
         child = Node("Child")
@@ -396,7 +389,6 @@ class TestWorldTransformComposition:
 
 
 class TestLifecycleOnLiveTree:
-
     def test_add_child_to_a_live_tree_fires_enter(self, log):
         parent = SpyNode("Parent", log)
         parent.enter()
@@ -461,7 +453,6 @@ class TestLifecycleOnLiveTree:
 
 
 class TestIsInsideTree:
-
     def test_starts_outside(self):
         assert Node("Node").is_inside_tree is False
 
@@ -498,7 +489,6 @@ class TestIsInsideTree:
 
 
 class TestActive:
-
     def test_active_by_default(self):
         assert Node("Node").active is True
 
@@ -545,7 +535,6 @@ class TestActive:
 
 
 class TestVisible:
-
     def test_visible_by_default(self):
         assert Node("Node").visible is True
 
@@ -576,7 +565,6 @@ class TestVisible:
 
 
 class TestMutationDuringTraversal:
-
     def test_a_node_removing_itself_does_not_skip_the_next_sibling(
         self, log, spy_input
     ):
@@ -643,7 +631,6 @@ class TestMutationDuringTraversal:
 
 
 class TestQueueFree:
-
     def test_queued_node_survives_the_current_frame(self, spy_input):
         # Ele termina o frame: o on_update dele ainda roda por inteiro.
         class Suicidal(Node):
@@ -806,7 +793,6 @@ class TestQueueFreeIsCollectedAtTheRoot:
 
 
 class TestQueueFreeBookkeeping:
-
     def test_queueing_twice_removes_once(self, spy_input):
         root = Node("Root")
         node = Node("Node")
@@ -876,7 +862,6 @@ class TestQueueFreeBookkeeping:
 
 
 class TestQueueFreeOnAScene:
-
     def test_a_scene_collects_like_any_other_root(self, spy_input):
         # Scene herda de Node e nao redefine update, entao ganha a
         # coleta de raiz de graca.
@@ -1188,7 +1173,6 @@ class TestWritingToTheReturnedWorldTransform:
 
 
 class TestCacheAgreesWithAFreshComputation:
-
     def test_a_scripted_sequence_never_disagrees(self):
         # Oraculo: a implementacao sem cache. Um cache so pode ser
         # testado contra a resposta que ele deveria ter dado.

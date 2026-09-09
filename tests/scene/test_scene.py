@@ -5,7 +5,6 @@ from tests.conftest import SpyNode
 
 
 class TestSceneIsANode:
-
     def test_inherits_from_node(self):
         # Uma Scene ser um Node e o que permite aninhar cena dentro de
         # cena mais tarde. Se isto quebrar, o SceneManager quebra junto.
@@ -34,7 +33,6 @@ class TestSceneIsANode:
 
 
 class TestSceneAsGraphRoot:
-
     def test_propagates_update_to_its_children(self, log, spy_input):
         scene = Scene("Level1")
         scene.add_child(SpyNode("Child", log))

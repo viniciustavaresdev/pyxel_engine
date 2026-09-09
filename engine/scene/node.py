@@ -7,7 +7,6 @@ from engine.ports.renderer import Renderer
 
 
 class Node:
-
     def __init__(self, name: str | None = None) -> None:
         self.name = name
 

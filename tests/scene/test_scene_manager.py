@@ -4,7 +4,6 @@ from tests.conftest import SpyNode, SpyScene
 
 
 class TestInitialState:
-
     def test_starts_without_a_scene(self):
         assert SceneManager().current_scene is None
 
@@ -13,7 +12,6 @@ class TestInitialState:
 
 
 class TestChangeScene:
-
     def test_becomes_the_current_scene(self):
         manager = SceneManager()
         scene = Scene("Level1")
@@ -66,7 +64,6 @@ class TestChangeScene:
 
 
 class TestDelegation:
-
     def test_update_reaches_the_current_scene(self, log, spy_input):
         manager = SceneManager()
         manager.change_scene(SpyScene("Level1", log))
@@ -98,7 +95,6 @@ class TestDelegation:
 
 
 class TestWithoutScene:
-
     def test_update_without_a_scene_is_a_no_op(self, spy_input):
         SceneManager().update(spy_input)
 
