@@ -46,8 +46,8 @@ PLAYER_SPEED = 1.2
 
 # Em FRAMES, como toda duracao daqui para frente. A 60 fps, 12 frames
 # sao 0,2 s -- cinco tiros por segundo.
-FIRE_COOLDOWN = 12
-FLASH_FRAMES = 3
+FIRE_COOLDOWN = 120
+FLASH_FRAMES = 60
 
 PLAYER_COLOR = 11
 FLASH_COLOR = 7
