@@ -20,7 +20,7 @@ venv\Scripts\activate          # Windows
 pip install -e ".[dev]"
 
 python main.py                 # a demo
-pytest                         # 548 testes, sem janela
+pytest                         # 666 testes, sem janela
 ```
 
 Verificação (as três precisam passar limpas):
@@ -48,13 +48,13 @@ arruma só ensina a ignorar avisos.
         └────────────────────┬─────────────────────────┘
                              │
         ┌────────────────────▼─────────────────────────┐
-        │  engine/math  scene  runtime  input          │
-        │  valores, a árvore, o laço de frame          │
+        │  engine/math  scene  physics  runtime  input │
+        │  valores, a árvore, a grade, o laço de frame │
         └────────────────────┬─────────────────────────┘
                              │  depende só de abstrações
         ┌────────────────────▼─────────────────────────┐
         │  engine/ports/                               │
-        │  Renderer   Input   Application              │
+        │  Renderer  TileSource  Input  Pointer  App   │
         └────────────────────▲─────────────────────────┘
                              │  implementa
         ┌────────────────────┴─────────────────────────┐
@@ -455,6 +455,99 @@ Três decisões que valem estar escritas:
 remapeamento, e acumular deixaria a tecla antiga respondendo junto com a nova —
 exatamente o que o jogador pediu para não acontecer.
 
+### TileSource — ler não é desenhar
+
+O Pyxel guarda o tilemap, e a engine precisa dele para duas coisas que não se
+parecem: **desenhar** o andar e **perguntar** que tile há numa célula para
+colidir. São duas portas sobre o mesmo `.pyxres`, de propósito:
+
+```python
+renderer.draw_tilemap(Vector2D(), 0, Rect(0, 0, 312, 192))  # pixels
+tiles.get_tile(column, row)                                  # tiles
+```
+
+Enfiar a leitura no `Renderer` obrigaria todo teste de colisão a dublar um
+renderizador inteiro para perguntar sobre geometria. Um dublê de `TileSource` é
+um dicionário — e o do `conftest` desenha o cenário em texto
+(`SpyTileSource.from_rows(["###", "#.#"], legend)`), para que a geometria que
+um teste afirma esteja visível nele.
+
+Cada porta fala na unidade da pergunta que responde: o desenho recorta uma
+região, e região é pixel; a leitura pergunta por uma célula, e célula é índice
+inteiro. `tile_size` é a ponte, e mora na porta em vez de fixo em 8 — o número
+é do backend, e a engine que o escrevesse estaria dizendo um detalhe do Pyxel
+em voz alta.
+
+Três coisas do backend que a porta esconde, todas verificadas:
+
+- `pyxel.bltm` fala em pixels nos quatro valores da região, não em tiles.
+- `Tilemap.pget` devolve `(0, 0)` **em silêncio** para qualquer célula fora do
+  banco — e `(0, 0)` é um tile legítimo, geralmente o vazio. O adaptador
+  levanta `IndexError` fora de `[0, width) × [0, height)`; o que existe além
+  da borda é decisão de quem colide, não do backend.
+- O banco tem 256×256 tiles; o andar desenhado é um canto dele.
+
+O que um tile **significa** — parede, chão — não é da engine. O jogo passa o
+conjunto de coordenadas que valem como sólido, pelo mesmo argumento do
+`ActionMap`: a engine possui o vocabulário de *tile*, "parede" é uma afirmação
+sobre esta arte.
+
+### Body + Collision — o andar, em duas metades que não se parecem
+
+`Body` é um `VisualNode` sem campo novo. O que faltava era um **nome**: o
+satélite da demo tem `size` e `anchor` e não deve esbarrar em nada, e tipar
+`move_and_slide` em `Body` faz um nó que nunca deveria colidir aparecer como
+erro de mypy, e não como fantasma sólido no andar. A caixa de colisão **é** a
+caixa de desenho.
+
+`Collision(tiles, solid)` responde três perguntas, e as três são geometria
+contra o mundo — nada que saiba o que é um jogador, uma bala ou um inimigo:
+
+| | Paredes | Corpos |
+|---|---|---|
+| Quantidade | milhares de células | ~10 |
+| Muda? | nunca | todo frame |
+| Como se acha | divisão pelo `tile_size` | percorrendo a lista |
+
+Uma parede nunca entra na lista de corpos, e é isso que apaga a pergunta do
+quadtree: a coisa numerosa é uma grade, e uma grade se indexa. Registrar um
+corpo (`add_body`) é dizer "os outros podem me acertar"; mover contra a grade
+não exige registro. A lista é mantida pelo jogo — dívida declarada, que os
+grupos vão apoiar na árvore.
+
+**`move_and_slide` resolve por eixo, não pelo vetor.** Move X e empurra para
+fora do que invadiu, depois Y. É o que dá deslizar na parede de graça: na
+diagonal contra uma parede vertical o X é barrado e o Y passa. Duas decisões
+por baixo, e são as que separam um jogo que desliza de um que gruda na quina:
+
+- **Só as células recém-entradas contam.** Cada eixo compara as colunas que a
+  caixa cobria antes do passo com as que cobre depois, e consulta só as novas.
+  Parado colado na parede não há célula nova, então não há empurrão fantasma —
+  o semiaberto do `Rect` e a grade concordam. Um delta maior que um tile vê
+  todas as colunas que cruzou, então corpo rápido não atravessa parede fina. E
+  um corpo que já nasceu dentro de parede **não é ejetado**: não há direção
+  certa para empurrar quem já está do outro lado.
+- **Um epsilon de `1e-6` encolhe a caixa antes de virar célula.** Sem ele, dez
+  empurrões deixam a borda em `16.0000001`, a coluna da parede passa a contar
+  como "já coberta", e o corpo atravessa em silêncio.
+
+**Fora do mapa é sólido.** É a única decisão da engine sobre o que existe além
+da borda, e mora em `is_solid`, olhando para `width`/`height` da porta.
+
+**`raycast` percorre a grade, não testa tudo.** DDA: avança célula a célula
+pela divisa mais próxima e para na primeira sólida — custo proporcional à
+distância, não ao mapa (teste: 40 px num mapa 200×200 lê no máximo 6 células).
+Os corpos entram por slab no mesmo percurso; vence o mais próximo, e no empate
+a parede. Devolve `RaycastHit(point, normal, distance, body | None)` — `body is
+None` é parede, a única distinção que uma bala precisa. A normal sai de graça
+(é o eixo que acabou de avançar); é zero quando o raio **nasceu** dentro de
+sólido, porque não há face para nomear. `ignore` existe porque quem atira lança
+o raio de dentro da própria caixa.
+
+`move_and_slide` escreve na posição **local** e resolve em **mundo** — só fecha
+se o pai for translação pura, que é o caso da camada `world`. Está escrito na
+docstring; nenhum jogo de tiles pede um corpo pendurado em pai girado.
+
 ---
 
 ## Um detalhe do backend que vale registrar
@@ -467,7 +560,9 @@ centro.
 
 Por isso a porta `Renderer.draw_sprite` recebe `center` e não `position`: é o
 único método que gira, e um desenho que gira precisa dizer em torno de quê. O
-adaptador faz a conversão. `draw_rect`, que não gira, continua falando em canto.
+adaptador faz a conversão. `draw_rect`, `draw_tilemap` e `draw_line`, que não
+giram, falam em canto — ou em dois pontos, no caso da linha, que é o formato em
+que um `raycast` já responde.
 
 ---
 
@@ -478,23 +573,26 @@ engine/
 ├── math/            valor puro: sem tempo, sem árvore, sem backend
 │   └── vector2d.py  rect.py  anchor.py  transform.py
 ├── scene/           a árvore e quem vive nela
-│   └── node.py  visual_node.py  scene.py  scene_manager.py  camera.py
+│   └── node.py  visual_node.py  body.py  scene.py  scene_manager.py  camera.py
+├── physics/         caixas contra a grade: corpo, célula e raio
+│   └── collision.py  raycast_hit.py
 ├── runtime/         o laço de frame e a composição do jogo
 │   └── engine.py  game.py  application_config.py  cooldown.py
 ├── input/           vocabulário de entrada
 │   └── key.py  action_map.py
 ├── ports/           o que a engine exige do mundo
-│   └── renderer.py  input.py  pointer.py  application.py
+│   └── renderer.py  tile_source.py  input.py  pointer.py  application.py
 └── adapters/        quem cumpre a exigência
-    └── pyxel/       pyxel_renderer.py  pyxel_input.py  ...
+    └── pyxel/       pyxel_renderer.py  pyxel_tile_source.py  pyxel_input.py  ...
 ```
 
-`tests/` espelha essa árvore: `tests/math/`, `tests/scene/`, `tests/runtime/`,
-`tests/input/`, `tests/ports/`, `tests/adapters/`.
+`tests/` espelha essa árvore: `tests/math/`, `tests/scene/`, `tests/physics/`,
+`tests/runtime/`, `tests/input/`, `tests/ports/`, `tests/adapters/`.
 
 O critério: cada pasta responde **o que não entra aqui**. Em `math/` não entra
 nada que conheça tempo ou árvore; em `scene/` nada que conheça o laço de frame;
-em `ports/` nenhuma implementação. Uma pasta que aceita qualquer arquivo — o
+em `physics/` nada que saiba o que é um jogador, uma bala ou um inimigo — nem a
+decisão de qual tile é parede, que é do jogo; em `ports/` nenhuma implementação. Uma pasta que aceita qualquer arquivo — o
 antigo `core/`, que acumulou quatro naturezas diferentes — parou de organizar e
 virou só o lugar onde as coisas estão.
 
@@ -506,7 +604,7 @@ sobrou uma pasta com nada dentro, e uma pasta vazia não organiza coisa alguma.
 
 ### A superfície pública
 
-`engine/__init__.py` reexporta os 19 nomes que um jogo realmente usa. O que está
+`engine/__init__.py` reexporta os 23 nomes que um jogo realmente usa. O que está
 lá é contrato; o resto é detalhe interno, livre para mudar de módulo sem aviso.
 
 ```python
@@ -543,6 +641,16 @@ orçamento de frame e o projeto está sob controle de versão. **Os onze passos 
 sequência estão feitos** — os três últimos (mapa de ações, camadas de render e a
 aposentadoria do `dt`) são os que se sentem escrevendo jogo em vez de engine.
 
+**A semana 2 do `PLANEJAMENTO.md` está fechada.** Entraram `draw_tilemap` e
+`draw_line` na porta de desenho, a porta `TileSource` (a segunda sobre o mesmo
+`.pyxres`, para ler em vez de desenhar), `Body`, e a pasta `physics/` com a
+`Collision` inteira — `move_and_slide`, `bodies_in` e `raycast`. A demo desenha
+o andar do `assets.pyxres`, o jogador anda por ele sem atravessar parede e
+escorrega na diagonal, e um raio de debug sai da mira e para na primeira
+parede. O que a execução acrescentou ao plano está em *Conceitos*: a regra das
+células recém-entradas, o epsilon contra deriva de float, "fora do mapa é
+sólido", `ignore` no raio. A suíte foi de 548 para 666 testes.
+
 **A semana 1 do `PLANEJAMENTO.md` está fechada.** Entraram a porta `Pointer`, os
 botões de mouse dentro do `Key`, `Camera.screen_to_world` / `world_to_screen`, o
 `Cooldown` em frames e o `show_cursor` no `ApplicationConfig`. A demo passou a
@@ -562,10 +670,11 @@ são os mesmos dois modos de falha que os passos 3 e 4 fecharam — enquadrament
 que vaza e pedido de remoção que não é coletado — reaparecendo em arranjos que
 os testes daqueles passos não visitam. Estão logo abaixo, em *Bugs confirmados*.
 
-O que resta além deles não é sequência, é lista de espera: resposta a colisão,
-`z_index`, `find_child`, o tamanho de tela que vive em dois lugares, e o
-acabamento. Cada um entra quando um jogo pedir — e um jogo é o que falta para
-saber qual pede primeiro.
+O que resta além deles não é sequência, é lista de espera: `z_index`,
+`find_child`, o tamanho de tela que vive em dois lugares, e o acabamento. Cada
+um entra quando um jogo pedir — e a semana 3 do plano já diz qual pede
+primeiro: grupos (para a lista de corpos deixar de ser mantida à mão) e
+`z_index` (corpo caído desenha sob quem está de pé).
 
 ### Bugs confirmados
 
@@ -843,9 +952,10 @@ retorno de `get_world_bounds()` — a mesma peça servindo de ergonomia de desen
 e de base de colisão. As decisões de fronteira (semiaberto, área zero,
 espelhamento) estão em *Conceitos*, com 25 testes atrás delas.
 
-O que ainda **não** existe é resposta a colisão: `intersects` diz *se* houve, e
-nada sobre profundidade de penetração ou eixo de separação. Empurrar o jogador
-para fora da parede é decisão de jogo, e ela entra quando um jogo pedir.
+~~O que ainda **não** existe é resposta a colisão.~~ Entrou na semana 2, e não
+como profundidade de penetração: `Collision.move_and_slide` resolve por eixo
+contra a grade de tiles, e `bodies_in` usa exatamente este `intersects` para a
+consulta por área. Está em *Conceitos*.
 
 **Arestas menores.** O tamanho da tela vive em dois lugares
 (`ApplicationConfig` e os argumentos da `Camera` no `main.py`) — mudar a

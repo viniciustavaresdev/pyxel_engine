@@ -71,6 +71,41 @@ class PyxelRenderer(Renderer):
             scale,
         )
 
+    def draw_tilemap(
+        self,
+        position: Vector2D,
+        tilemap: int,
+        region: Rect,
+        color_key: int | None = None,
+    ) -> None:
+        # O bltm fala em PIXELS nos quatro valores da regiao (u, v, w,
+        # h), e nao em tiles -- verificado desenhando em uma janela
+        # minima: `bltm(0, 0, 0, 8, 8, 8, 8)` copia o tile (1, 1) do
+        # mapa, nao o (8, 8). Por isso a regiao da porta passa direto,
+        # sem multiplicar por TILE_SIZE. Quem conta em tiles e o
+        # `Tilemap.pget`, do outro lado, e e a porta `TileSource` que
+        # traduz aquele vocabulario.
+        pyxel.bltm(
+            position.x,
+            position.y,
+            tilemap,
+            region.x,
+            region.y,
+            region.width,
+            region.height,
+            color_key,
+        )
+
+    def draw_line(
+        self,
+        start: Vector2D,
+        end: Vector2D,
+        color: int,
+    ) -> None:
+        # Float direto, como nos outros: o Pyxel aceita, e prender a
+        # grade e politica que nao mora aqui.
+        pyxel.line(start.x, start.y, end.x, end.y, color)
+
     def draw_text(
         self,
         position: Vector2D,

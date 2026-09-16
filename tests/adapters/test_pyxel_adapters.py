@@ -15,6 +15,7 @@ from engine.adapters.pyxel.pyxel_application import PyxelApplication
 from engine.adapters.pyxel.pyxel_input import _PYXEL_KEYS, PyxelInput
 from engine.adapters.pyxel.pyxel_pointer import PyxelPointer
 from engine.adapters.pyxel.pyxel_renderer import PyxelRenderer
+from engine.adapters.pyxel.pyxel_tile_source import PyxelTileSource
 from engine.input.key import Key
 from engine.math.rect import Rect
 from engine.math.vector2d import Vector2D
@@ -22,6 +23,7 @@ from engine.ports.application import Application
 from engine.ports.input import Input
 from engine.ports.pointer import Pointer
 from engine.ports.renderer import Renderer
+from engine.ports.tile_source import TileSource
 from engine.runtime.application_config import ApplicationConfig
 
 
@@ -89,6 +91,9 @@ class TestAdaptersSatisfyTheirPorts:
 
     def test_pyxel_pointer(self):
         assert isinstance(PyxelPointer(), Pointer)
+
+    def test_pyxel_tile_source(self):
+        assert isinstance(PyxelTileSource(0), TileSource)
 
 
 class TestPyxelApplicationAppliesTheConfig:
@@ -221,6 +226,102 @@ class TestPyxelPointerReadsTheCursor:
         assert PyxelPointer().get_position() == Vector2D(-12.0, 999.0)
 
 
+class _FakeTilemap:
+    """O que o adaptador toca de um `pyxel.Tilemap`: width, height, pget.
+
+    Reproduz o comportamento REAL do pget fora do mapa -- devolve
+    (0, 0) sem reclamar -- porque e exatamente contra isso que o
+    adaptador se defende, e um dublê que levantasse sozinho deixaria o
+    teste passar sem a guarda existir.
+    """
+
+    def __init__(self, tiles, width, height):
+        self.tiles = tiles
+        self.width = width
+        self.height = height
+
+    def pget(self, x, y):
+        return self.tiles.get((x, y), (0, 0))
+
+
+class TestPyxelTileSourceReadsTheTilemap:
+    """A leitura de um banco de tilemap, sem abrir janela.
+
+    Monkeypatch em `pyxel.tilemaps`: sem `pyxel.init()` a lista nem
+    existe, e o que precisa ser travado aqui e a TRADUCAO -- coluna e
+    linha em tiles chegam ao pget na mesma ordem, o tamanho do tile vem
+    do backend, e a guarda de borda transforma o (0, 0) silencioso do
+    Pyxel em erro.
+    """
+
+    def _install(self, monkeypatch, *tilemaps):
+        monkeypatch.setattr(pyxel, "tilemaps", list(tilemaps), raising=False)
+
+    def test_it_reads_the_tile_at_column_and_row(self, monkeypatch):
+        self._install(
+            monkeypatch, _FakeTilemap({(3, 1): (2, 0)}, width=8, height=8)
+        )
+
+        assert PyxelTileSource(0).get_tile(3, 1) == (2, 0)
+
+    def test_the_index_selects_the_bank(self, monkeypatch):
+        self._install(
+            monkeypatch,
+            _FakeTilemap({(0, 0): (1, 0)}, width=4, height=4),
+            _FakeTilemap({(0, 0): (5, 5)}, width=4, height=4),
+        )
+
+        assert PyxelTileSource(1).get_tile(0, 0) == (5, 5)
+
+    def test_width_and_height_come_from_the_bank(self, monkeypatch):
+        self._install(monkeypatch, _FakeTilemap({}, width=39, height=24))
+
+        source = PyxelTileSource(0)
+
+        assert (source.width, source.height) == (39, 24)
+
+    def test_tile_size_comes_from_the_backend_constant(self, monkeypatch):
+        # A engine nunca escreve 8. Se o Pyxel um dia mudar a constante,
+        # a porta responde o valor novo sem uma linha na engine.
+        monkeypatch.setattr(pyxel, "TILE_SIZE", 16)
+
+        assert PyxelTileSource(0).tile_size == 16
+
+    def test_outside_the_map_raises_instead_of_answering_zero(
+        self, monkeypatch
+    ):
+        # O backend responderia (0, 0) aqui, e (0, 0) e um tile
+        # legitimo. O adaptador cumpre o que a porta promete.
+        self._install(monkeypatch, _FakeTilemap({}, width=4, height=4))
+
+        source = PyxelTileSource(0)
+
+        for column, row in [(-1, 0), (0, -1), (4, 0), (0, 4)]:
+            try:
+                source.get_tile(column, row)
+            except IndexError:
+                continue
+
+            raise AssertionError(f"({column}, {row}) did not raise")
+
+    def test_it_resolves_the_bank_on_every_call(self, monkeypatch):
+        # Guarda o INDICE, nao o objeto: `pyxel.load` troca os bancos
+        # inteiros, e um adaptador construido antes do initialize -- o
+        # caso normal -- apontaria para um tilemap que deixou de
+        # existir.
+        source = PyxelTileSource(0)
+
+        self._install(monkeypatch, _FakeTilemap({}, width=1, height=1))
+        before = source.get_tile(0, 0)
+
+        self._install(
+            monkeypatch, _FakeTilemap({(0, 0): (7, 7)}, width=1, height=1)
+        )
+        after = source.get_tile(0, 0)
+
+        assert (before, after) == ((0, 0), (7, 7))
+
+
 class TestPyxelRendererSpriteOrigin:
     """A traducao centro -> canto exigida pelo blt.
 
@@ -289,6 +390,61 @@ class TestPyxelRendererSpriteOrigin:
         assert calls[0][8] == 90.0
 
 
+class TestPyxelRendererTilemap:
+    """A traducao do draw_tilemap para o bltm.
+
+    Monkeypatch pelo mesmo motivo do draw_sprite: bltm sem janela nao
+    roda, e o que precisa ser travado e a passagem dos argumentos --
+    em especial que a regiao chega em PIXELS, sem multiplicacao por
+    tamanho de tile. Foi verificado desenhando em uma janela minima
+    que e essa a unidade do bltm; se o Pyxel mudar isso um dia, e este
+    teste que precisa mudar junto, e nao o codigo de jogo.
+    """
+
+    def _record(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(pyxel, "bltm", lambda *args: calls.append(args))
+
+        return calls
+
+    def test_the_corner_and_region_pass_straight_through(self, monkeypatch):
+        calls = self._record(monkeypatch)
+
+        PyxelRenderer().draw_tilemap(
+            Vector2D(10.0, 20.0), 0, Rect(16.0, 8.0, 160.0, 120.0)
+        )
+
+        assert calls[0] == (10.0, 20.0, 0, 16.0, 8.0, 160.0, 120.0, None)
+
+    def test_the_tilemap_index_selects_the_bank(self, monkeypatch):
+        calls = self._record(monkeypatch)
+
+        PyxelRenderer().draw_tilemap(Vector2D(), 3, Rect(0.0, 0.0, 8.0, 8.0))
+
+        assert calls[0][2] == 3
+
+    def test_the_color_key_reaches_the_backend(self, monkeypatch):
+        calls = self._record(monkeypatch)
+
+        PyxelRenderer().draw_tilemap(
+            Vector2D(), 0, Rect(0.0, 0.0, 8.0, 8.0), color_key=0
+        )
+
+        assert calls[0][-1] == 0
+
+    def test_a_fractional_corner_is_not_rounded(self, monkeypatch):
+        # Mesma politica dos outros metodos: o adaptador nao prende a
+        # grade. Um tilemap desenhado sob uma camera fracionaria segue
+        # a camera, e nao salta de pixel em pixel sozinho.
+        calls = self._record(monkeypatch)
+
+        PyxelRenderer().draw_tilemap(
+            Vector2D(0.5, -0.25), 0, Rect(0.0, 0.0, 8.0, 8.0)
+        )
+
+        assert calls[0][:2] == (0.5, -0.25)
+
+
 class TestTheAdapterDoesNotSnapToTheGrid:
     """Prender o desenho a grade e politica, e nao mora aqui.
 
@@ -305,6 +461,14 @@ class TestTheAdapterDoesNotSnapToTheGrid:
         PyxelRenderer().draw_rect(Vector2D(10.5, 20.5), Vector2D(4.5, 8.5), 11)
 
         assert calls[0] == (10.5, 20.5, 4.5, 8.5, 11)
+
+    def test_draw_line_passes_both_ends_untouched(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(pyxel, "line", lambda *args: calls.append(args))
+
+        PyxelRenderer().draw_line(Vector2D(1.5, 2.5), Vector2D(30.25, 40.0), 8)
+
+        assert calls[0] == (1.5, 2.5, 30.25, 40.0, 8)
 
     def test_draw_text_passes_the_position_untouched(self, monkeypatch):
         calls = []

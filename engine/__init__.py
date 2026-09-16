@@ -24,14 +24,18 @@ from engine.math.anchor import Anchor
 from engine.math.rect import Rect
 from engine.math.transform import Transform
 from engine.math.vector2d import Vector2D
+from engine.physics.collision import Collision
+from engine.physics.raycast_hit import RaycastHit
 from engine.ports.application import Application
 from engine.ports.input import Input
 from engine.ports.pointer import Pointer
 from engine.ports.renderer import Renderer
+from engine.ports.tile_source import TileSource
 from engine.runtime.application_config import ApplicationConfig
 from engine.runtime.cooldown import Cooldown
 from engine.runtime.engine import Engine
 from engine.runtime.game import Game
+from engine.scene.body import Body
 from engine.scene.camera import Camera
 from engine.scene.node import Node
 from engine.scene.scene import Scene
@@ -45,6 +49,7 @@ __all__ = [
     "Transform",
     "Vector2D",
     # scene -- a arvore
+    "Body",
     "Camera",
     "Node",
     "Scene",
@@ -55,6 +60,9 @@ __all__ = [
     "Cooldown",
     "Engine",
     "Game",
+    # physics -- caixas contra a grade
+    "Collision",
+    "RaycastHit",
     # input
     "ActionMap",
     "Key",
@@ -63,4 +71,5 @@ __all__ = [
     "Input",
     "Pointer",
     "Renderer",
+    "TileSource",
 ]

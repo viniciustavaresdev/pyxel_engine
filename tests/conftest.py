@@ -11,6 +11,7 @@ from engine.ports.application import Application
 from engine.ports.input import Input
 from engine.ports.pointer import Pointer
 from engine.ports.renderer import Renderer
+from engine.ports.tile_source import TileSource
 from engine.scene.node import Node
 from engine.scene.scene import Scene
 
@@ -62,6 +63,24 @@ class SpyRenderer(Renderer):
                 scale,
             )
         )
+
+    def draw_tilemap(self, position, tilemap, region, color_key=None):
+        self.calls.append(
+            (
+                "draw_tilemap",
+                position.x,
+                position.y,
+                tilemap,
+                region.x,
+                region.y,
+                region.width,
+                region.height,
+                color_key,
+            )
+        )
+
+    def draw_line(self, start, end, color):
+        self.calls.append(("draw_line", start.x, start.y, end.x, end.y, color))
 
     def draw_text(self, position, text, color):
         self.calls.append(("draw_text", position.x, position.y, text, color))
@@ -136,6 +155,78 @@ class SpyPointer(Pointer):
     def move_to(self, x, y):
         """Simula o frame em que o cursor apareceu em outro lugar."""
         self.position = Vector2D(x, y)
+
+
+class SpyTileSource(TileSource):
+    """Um tilemap desenhado em texto, para testar colisao sem janela.
+
+    E a promessa que a porta `TileSource` faz: um duble e um dicionario
+    de poucas linhas. `from_rows` deixa o teste DESENHAR o cenario --
+    uma parede vertical, uma quina, uma celula solta -- em vez de
+    listar coordenadas, para que quem le o teste veja a geometria que
+    ele afirma.
+
+    O tile fora da legenda e `(0, 0)` de proposito: e o que o Pyxel
+    devolve para uma celula nunca pintada, entao um duble que
+    inventasse outro valor estaria testando contra um backend que nao
+    existe. O que `(0, 0)` SIGNIFICA continua sendo do teste, como
+    seria do jogo.
+    """
+
+    def __init__(self, tiles, width, height, tile_size=8):
+        self.tiles = dict(tiles)
+        self._width = width
+        self._height = height
+        self._tile_size = tile_size
+
+    @classmethod
+    def from_rows(cls, rows, legend, tile_size=8):
+        """Monta o mapa a partir de linhas de texto e uma legenda.
+
+            SpyTileSource.from_rows(
+                ["###", "#.#", "###"],
+                legend={"#": (1, 0), ".": (1, 1)},
+            )
+
+        Toda linha precisa ter a mesma largura: um mapa irregular nao
+        e um tilemap, e uma linha mais curta por descuido viraria
+        celulas `(0, 0)` que o teste nao desenhou.
+        """
+        widths = {len(row) for row in rows}
+
+        if len(widths) > 1:
+            raise ValueError("Every row must have the same width.")
+
+        tiles = {
+            (column, row): legend[char]
+            for row, line in enumerate(rows)
+            for column, char in enumerate(line)
+        }
+
+        return cls(tiles, len(rows[0]) if rows else 0, len(rows), tile_size)
+
+    @property
+    def tile_size(self):
+        return self._tile_size
+
+    @property
+    def width(self):
+        return self._width
+
+    @property
+    def height(self):
+        return self._height
+
+    def get_tile(self, column, row):
+        # Mesmo contrato do adaptador: fora do mapa levanta, em vez de
+        # devolver o (0, 0) silencioso do backend.
+        if not (0 <= column < self._width and 0 <= row < self._height):
+            raise IndexError(
+                f"Tile ({column}, {row}) is outside the "
+                f"{self._width}x{self._height} tilemap."
+            )
+
+        return self.tiles.get((column, row), (0, 0))
 
 
 class SpyApplication(Application):

@@ -67,6 +67,54 @@ class Renderer(ABC):
         """
 
     @abstractmethod
+    def draw_tilemap(
+        self,
+        position: Vector2D,
+        tilemap: int,
+        region: Rect,
+        color_key: int | None = None,
+    ) -> None:
+        """Copia `region` do banco de tilemap `tilemap` com o canto em
+        `position`.
+
+        Mesmo formato do `draw_sprite` -- indice de banco e regiao em
+        valores da engine, o adaptador desmonta para o backend. A
+        diferenca e o ponto de referencia: um tilemap nao gira, entao
+        fala em CANTO, como o `draw_rect`. So o metodo que gira precisa
+        dizer em torno de que.
+
+        `region` e em PIXELS, nao em tiles. E a unidade em que o
+        `Rect` ja fala em todo o resto da porta, e e o que permite
+        desenhar so a fatia que a camera enxerga sem que o chamador
+        multiplique por um tamanho de tile que e do backend. Quem
+        precisa de tile como unidade e a colisao, e ela pergunta a
+        outra porta -- `TileSource` -- porque ler nao e desenhar.
+
+        `color_key` como no `draw_sprite`: a cor tratada como
+        transparente; None desenha opaco.
+        """
+
+    @abstractmethod
+    def draw_line(
+        self,
+        start: Vector2D,
+        end: Vector2D,
+        color: int,
+    ) -> None:
+        """Um segmento de `start` a `end`, com os dois extremos pintados.
+
+        Dois pontos, e nao ponto + direcao + comprimento: e o formato
+        em que a resposta de um raycast ja chega -- a origem e o
+        `point` do acerto -- e o que uma linha entre dois nos pede. A
+        outra forma obrigaria quem tem dois pontos a subtrair e medir
+        para o adaptador desfazer a conta do outro lado.
+
+        Nasceu como ferramenta de debug (o raio da mira), e e o que
+        continua sendo: um jogo de pixel art desenha com sprites e
+        tiles, e a linha e para VER geometria, nao para compor arte.
+        """
+
+    @abstractmethod
     def draw_text(
         self,
         position: Vector2D,

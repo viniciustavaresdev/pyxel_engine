@@ -70,6 +70,47 @@ class TestVectorSignatures:
 
         assert renderer.calls[0][-3:] == (0, 1.57, 2.0)
 
+    def test_draw_tilemap_takes_a_corner_and_a_region(self, renderer):
+        # Canto, e nao centro: um tilemap nao gira, entao fala como o
+        # draw_rect, e nao como o draw_sprite.
+        renderer.draw_tilemap(
+            Vector2D(0.0, 0.0), 0, Rect(0.0, 0.0, 312.0, 192.0)
+        )
+
+        assert renderer.calls == [
+            ("draw_tilemap", 0.0, 0.0, 0, 0.0, 0.0, 312.0, 192.0, None)
+        ]
+
+    def test_draw_tilemap_defaults_to_opaque(self, renderer):
+        renderer.draw_tilemap(Vector2D(), 0, Rect(0.0, 0.0, 8.0, 8.0))
+
+        assert renderer.calls[0][-1] is None
+
+    def test_draw_tilemap_carries_the_color_key(self, renderer):
+        renderer.draw_tilemap(
+            Vector2D(), 1, Rect(0.0, 0.0, 8.0, 8.0), color_key=0
+        )
+
+        assert renderer.calls[0][3] == 1
+        assert renderer.calls[0][-1] == 0
+
+    def test_draw_line_takes_two_points(self, renderer):
+        # Dois pontos, e nao origem + direcao: e o formato em que um
+        # raycast ja responde.
+        renderer.draw_line(Vector2D(1.0, 2.0), Vector2D(30.0, 40.0), 8)
+
+        assert renderer.calls == [("draw_line", 1.0, 2.0, 30.0, 40.0, 8)]
+
+    def test_draw_tilemap_region_is_in_pixels(self, renderer):
+        # A regiao chega ao duble exatamente como foi passada: a porta
+        # fala em pixels, e nenhuma multiplicacao por tamanho de tile
+        # acontece deste lado da fronteira.
+        renderer.draw_tilemap(
+            Vector2D(4.0, 4.0), 0, Rect(16.0, 8.0, 160.0, 120.0)
+        )
+
+        assert renderer.calls[0][4:8] == (16.0, 8.0, 160.0, 120.0)
+
 
 class TestTheSpyRecordsEachCallSeparately:
     def test_reusing_a_vector_across_calls_is_safe(self):
